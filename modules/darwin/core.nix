@@ -33,6 +33,6 @@
   # would leave less than min-free on the store volume triggers GC until
   # max-free is available. Policy is portable; the numbers are overridable
   # per host.
-  nix.settings.min-free = lib.mkDefault (5 * 1024 * 1024 * 1024); # 5 GiB
+  nix.settings.min-free = lib.mkDefault (10 * 1024 * 1024 * 1024); # 10 GiB
   nix.settings.max-free = lib.mkDefault (20 * 1024 * 1024 * 1024); # 20 GiB
 }
