@@ -32,3 +32,19 @@ clone. Enable them once per clone:
 The pre-commit hook runs gitleaks against staged changes and refuses commits
 containing secrets. It is the seatbelt, not the strategy: no secret ever enters
 this repo or the Nix store (PLAN.md, principle 5).
+
+## Consuming modules from another flake
+
+Portable home modules are exported as `homeManagerModules.*`, so a machine not
+yet ported into this repo can reuse them:
+
+    # flake.nix
+    inputs.nix-macos-config.url = "github:milesAwayAlex/nix-macos-config";
+
+    # anywhere in that flake's home-manager configuration
+    imports = [ inputs.nix-macos-config.homeManagerModules.karabiner ];
+
+The karabiner module converges `~/.config/karabiner/karabiner.json` on
+activation (a copy, not a symlink — Karabiner mishandles symlinked config);
+local edits to the live file are overwritten on every switch. Updates are
+deliberate pulls: `nix flake update nix-macos-config`, then rebuild.
