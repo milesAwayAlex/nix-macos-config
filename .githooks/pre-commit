@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+if command -v gitleaks >/dev/null 2>&1; then
+  exec gitleaks git --pre-commit --staged --redact -v
+fi
+# Non-interactive shells (GUI git clients, tool harnesses) don't source
+# /etc/bashrc, so nix may not be on PATH even where it's installed.
+NIX=$(command -v nix || echo /nix/var/nix/profiles/default/bin/nix)
+exec "$NIX" run nixpkgs#gitleaks -- git --pre-commit --staged --redact -v
