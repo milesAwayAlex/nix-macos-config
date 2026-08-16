@@ -143,14 +143,15 @@ unavoidable; type that password in QWERTY).
 - [ ] Karabiner-Elements app: currently a manually-installed bundle (brew cask was
       broken at install time) — adopt as cask in Phase 3 (`--force`/adopt moment;
       recheck whether the cask works).
-- [ ] Config delivery: **undecided — Karabiner is known finicky with symlinked
-      config; test before committing to a mechanism.** Candidates: store-symlink
-      the whole dir (`xdg.configFile."karabiner"`) · symlink only
-      `karabiner/karabiner.json` (Karabiner writes `automatic_backups/` beside
-      it at runtime) · HM activation copies a plain writable file · generate
-      from a Nix attrset via `builtins.toJSON`. Whatever wins: per-machine
-      device blocks can ship as the union of both machines' devices (entries
-      for absent devices are inert); the symlink options sacrifice GUI editing.
+- [x] Config delivery — **decided 2026-08-15: copy-on-activation.** Symlink
+      refuted by live test on `work`: the watcher misses edits made through
+      the link AND GUI edits replace the link. HM `home.activation` (after
+      `writeBoundary`) converges a real writable file, `cmp`-guarded so no-op
+      switches stay no-op; drift is overwritten on switch (noted in output).
+      Module: `modules/home/karabiner`, exported as `homeManagerModules.karabiner`.
+      Per-machine device blocks: ship the union of both machines' devices
+      (entries for absent devices are inert). Nix-attrset `builtins.toJSON`
+      generation stays the later option if real per-machine divergence appears.
 - [ ] Pre-login remapping: activation step copying karabiner.json to Karabiner's
       *system default configuration* path (automates the documented
       "use before logging in" GUI button; verify path during implementation).
@@ -252,8 +253,8 @@ hypothetical fresh machine.
 ## Open TODOs
 
 - [ ] Pick exact Programmer Dvorak keylayout variant + source.
-- [ ] Karabiner config delivery mechanism (symlink finickiness — test on `work`
-      before committing; see Phase 2).
+- [x] Karabiner config delivery mechanism → copy-on-activation (symlink refuted
+      by live test on `work`, 2026-08-15; see Phase 2).
 - [ ] Verify: login-window input menu defaults key; Karabiner system-default config
       path; 1Password Chrome extension ID; bash-from-nix login shell on MDM device.
 - [x] Decide repo name → **`nix-macos-config`** (github.com/milesAwayAlex).

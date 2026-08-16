@@ -1,7 +1,8 @@
-# Home-manager entry point. Near-empty on purpose: Phase 1 gates the
-# plumbing; payloads (karabiner first) come after.
+# Home-manager entry point.
 { ... }:
 {
+  imports = [ ./karabiner ];
+
   programs.home-manager.enable = true;
 
   home.stateVersion = "26.05";

@@ -41,7 +41,7 @@
 
       # Portable home modules, exported so other flakes (the `old` machine,
       # pre-Phase-6) can consume them as an input.
-      homeManagerModules = { };
+      homeManagerModules.karabiner = ./modules/home/karabiner;
 
       devShells.${system}.default = pkgs.mkShell {
         packages = [
