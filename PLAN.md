@@ -30,7 +30,7 @@ transition plan. The repo this plan produces is **public from day one**.
 | User config | home-manager **as nix-darwin module** | One command, one lock, one GC, atomic generations. Flip to standalone per-machine only if no-Touch-ID password friction grates (work machine candidate). |
 | nixpkgs | **26.05 release train**: `nixpkgs-26.05-darwin` + matched `nix-darwin-26.05` + HM `release-26.05`; weekly lock bumps via `update-flake-lock` action | Flipped from unstable 2026-08-15, pre-payload ("zero to unstable felt iffy"). Darwin-tested stable channel; train bump = twice-yearly deliberate chore (26.11 due ~Nov 2026; 26.05 EOL ~Dec 2026). Escape hatches: flip to unstable (3 input lines) if a forced macOS update needs master-only fixes; surgical secondary unstable input if package freshness hurts (Phase 4). |
 | GUI apps | Homebrew casks via nix-darwin + **nix-homebrew** (taps pinned as flake inputs, `autoMigrate` adopts existing install) | Casks for self-updating/permission-heavy apps; nixpkgs + mac-app-util for stable dev GUI (Alacritty). |
-| Spotlight/Dock fix | mac-app-util module | Trampolines fix Spotlight indexing, Dock pins, TCC churn for nix-installed .apps. |
+| Spotlight/Dock fix | ~~mac-app-util module~~ — dropped 2026-08, functionality upstreamed | Was: trampolines fixing Spotlight/Dock/TCC for nix-installed .apps. Verify the built-in equivalent when Phase 4 puts Alacritty in from nixpkgs. |
 | Secrets | 1Password-first runtime references (`op`, SSH agent); **nothing in repo/store**; sops-nix deferred until first server/VM | gitleaks pre-commit as seatbelt. Bitwarden = second domain; vaultwarden self-host option later. |
 | Browsers | **Both first-class.** Chrome: cask + declared policy baseline (G Suite daily driver). Firefox: cask app + full `programs.firefox` config (profile, user.js, NUR extensions). | Both self-update (appliance tier). Never install browsers from nixpkgs on macOS. |
 | AI harnesses | Native self-updating installers, bootstrapped by activation script; configs (`~/.claude/settings.json` etc.) HM-linked per-file | Binary = appliance; config = code. |
@@ -44,7 +44,7 @@ transition plan. The repo this plan produces is **public from day one**.
 | Alias | Hardware | Status |
 |---|---|---|
 | `work` | This laptop, macOS 15.7.7 (Sequoia), **MDM-managed**, no Touch ID, Homebrew present | First target. Phase 0 MDM gate passed; Nix seeded 2026-08-15. |
-| `old` | Old laptop (personal), running its own flake-based nix-darwin + HM config | Host #2. Near-term: its flake consumes this repo as an input (`homeManagerModules.*`) for shared modules (karabiner first). Full port into this repo = Phase 6. |
+| `old` | Old laptop (personal), running its own flake-based nix-darwin + HM config | Host #2. **Live consumer since 2026-08-16**: imports `homeManagerModules.karabiner` via `home-manager.sharedModules`. Full port into this repo = Phase 6. |
 
 Flake outputs are **alias-named** (`darwinConfigurations.work`, `.old`);
 `darwin-rebuild switch --flake ~/dotfiles#work` — hostname lookup is only a default.
@@ -94,34 +94,33 @@ The justfile resolves the alias (env var `NIXHOST` or `hostname -s` mapping).
       uninstall: `sudo /nix/nix-installer uninstall`. Recorded in README.
       *(Installer run from a locally reviewed copy of the bootstrap script —
       it pins the release itself.)*
-- [ ] Flake skeleton:
-  ```nix
-  # flake.nix (sketch)
-  inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    nix-darwin.url = "github:nix-darwin/nix-darwin";
-    home-manager.url = "github:nix-community/home-manager";
-    nix-homebrew.url = "github:zhaofengli/nix-homebrew";
-    mac-app-util.url = "github:hraban/mac-app-util";
-    # later: nur (firefox addons)
-  };
-  ```
-  Module layout: `modules/darwin/` (system), `modules/home/` (portable),
-  `hosts/work.nix`, `hosts/old.nix`. Portable home modules also exported as
-  `homeManagerModules.*` flake outputs so the `old` machine's existing flake
-  can consume them before its Phase 6 port.
-- [ ] Core nix settings: `nix.enable = true`; `nix.gc.automatic = true` with
-      `--delete-older-than 14d`; `nix.optimise.automatic = true`;
-      `nix.settings.experimental-features = [ "nix-command" "flakes" ]`;
-      `system.stateVersion`.
-- [ ] Wire home-manager module + mac-app-util; HM config near-empty for now —
-      first payload: karabiner.json (pulled forward from Phase 2).
-- [ ] `justfile`: `switch`, `update`, `gc`, `check` targets. `CLAUDE.md` documenting
-      the workflow. `update-flake-lock` GitHub Action (weekly PR).
-- [ ] First `sudo darwin-rebuild switch --flake .#work`.
+- [x] Flake skeleton *(2026-08-15)*: inputs pinned to the 26.05 release train
+      (see nixpkgs row); mac-app-util dropped (upstreamed — verify the built-in
+      equivalent when Phase 4 installs nixpkgs GUI apps); nix-homebrew joins in
+      Phase 3. Layout: `modules/darwin/core.nix` (portable policy),
+      `modules/home/` (portable user config), `hosts/work.nix` (host identity).
+      Portable home modules exported as `homeManagerModules.*`.
+- [x] Core nix settings — as planned, plus a reactive disk floor:
+      `nix.settings.min-free` 10 GiB / `max-free` 20 GiB (`mkDefault`,
+      host-tunable). Host identity (`system.primaryUser`, user home,
+      `system.stateVersion = 7`) lives in `hosts/work.nix`.
+- [x] Home-manager wired as nix-darwin module; first payload = karabiner
+      (pulled forward from Phase 2, see there).
+- [x] `justfile` (`switch`, `build`, `check`, `update`, `gc`; host via `NIXHOST`,
+      default `work`) + gitleaks CI backstop *(2026-08-16)*. `just` + `gitleaks`
+      added to `home.packages`. Deliberately deferred to a future **PR-guards
+      pass**: the `update-flake-lock` weekly bot (solo workflow = `just update`
+      + local rebuild review, so the bot saves nothing yet) and the CI eval
+      check (free on a public repo, but low value pre-PR-guards).
+      `CLAUDE.md` still pending.
+- [x] First `sudo darwin-rebuild switch --flake .#work` *(2026-08-15)* — no
+      /etc move-aside needed: nix-darwin's known-hash list silently adopted the
+      installer's stock bashrc/zshrc/nix.conf.
 
-**Gate:** second switch is a no-op (idempotent); `nix.package` owns the running Nix;
-bot PR pipeline works.
+**Gate:** second switch is a no-op ☑; `nix.package` owns the running Nix ☑
+(nix 2.34.8 from 26.05 — below the 2.35.1 seed, expected on stable);
+bot PR pipeline — re-scoped 2026-08-16 (deferred to the PR-guards pass).
+**Phase 1 complete** modulo `CLAUDE.md`.
 
 ## Phase 2 — Input layer: Programmer Dvorak + Karabiner ☐
 
@@ -152,6 +151,15 @@ unavoidable; type that password in QWERTY).
       Per-machine device blocks: ship the union of both machines' devices
       (entries for absent devices are inert). Nix-attrset `builtins.toJSON`
       generation stays the later option if real per-machine divergence appears.
+- [x] Config reviewed line-by-line *(2026-08-16)*: fossil TouchBar-era device
+      entry removed (old Intel Mac's internal keyboard ID); scramble kept as
+      profile-root simple modifications (device-scoped `{is_keyboard: true}`
+      failed on current Karabiner); readline rule re-bucketed — byte-identity
+      chords (^I ^[ ^M ^H) unconditional, arrows excluded only in Alacritty,
+      ^W restored, ^U reimplemented as native cmd+⌫; deliberate ctrl+cmd layer
+      (cmd optional on i/m/h/b/p/n; excluded on f = fullscreen). Cheatsheet:
+      `KEYBOARD.md`. **Cross-machine reuse live**: `old` imports
+      `homeManagerModules.karabiner` via `home-manager.sharedModules`.
 - [ ] Pre-login remapping: activation step copying karabiner.json to Karabiner's
       *system default configuration* path (automates the documented
       "use before logging in" GUI button; verify path during implementation).
@@ -236,6 +244,12 @@ hypothetical fresh machine.
 
 ## Deferred backlog (designed, not scheduled)
 
+- **PR-guards pass**: `update-flake-lock` weekly bot (posture note: pair with
+  `cachix/install-nix-action` for upstream Nix, PR via
+  `peter-evans/create-pull-request`; GITHUB_TOKEN-created PRs don't trigger
+  workflows — needs a fine-grained PAT for CI-on-bot-PRs) + CI eval check
+  (`nix eval .#darwinConfigurations.<host>.system.drvPath` on ubuntu; optional
+  full build on free arm64 macos runners).
 - `nix.linux-builder` (sized: ~4 cores / 6 GB on small machines; launchd
   `ProcessType = "Interactive"`; aarch64-linux only — no x86 via QEMU).
 - colima (`--vm-type vz`) + docker CLI + k3d/kind for containers/k8s.
