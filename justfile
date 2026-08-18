@@ -23,3 +23,7 @@ update *input:
 # collect garbage, matching the automatic policy — never bare -d
 gc:
     sudo nix-collect-garbage --delete-older-than 14d
+
+# format nix code (nixfmt via treefmt, wired as the flake formatter)
+fmt:
+    nix fmt

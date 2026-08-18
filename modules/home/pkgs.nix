@@ -6,11 +6,15 @@
 {
   home.packages = with pkgs; [
     fzf
+    gh
     git
     gitleaks
     glow
+    htop
+    jq
     just
     ripgrep
     tmux
+    yq-go # mikefarah's yq (the `yq` attr is the unrelated python wrapper)
   ];
 }

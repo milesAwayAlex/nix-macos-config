@@ -51,5 +51,8 @@
           pkgs.just
         ];
       };
+
+      # `nix fmt` formats the whole tree: treefmt wrapping nixfmt (RFC 166).
+      formatter.${system} = pkgs.nixfmt-tree;
     };
 }
