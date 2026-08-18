@@ -45,6 +45,7 @@
       homeModules.alacritty = ./modules/home/alacritty.nix;
       homeModules.karabiner = ./modules/home/karabiner;
       homeModules.packages = ./modules/home/pkgs.nix;
+      homeModules.tmux = ./modules/home/tmux.nix;
       darwinModules.input = ./modules/darwin/input;
 
       devShells.${system}.default = pkgs.mkShell {

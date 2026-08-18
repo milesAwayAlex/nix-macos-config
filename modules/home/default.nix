@@ -5,6 +5,7 @@
     ./pkgs.nix
     ./alacritty.nix
     ./karabiner
+    ./tmux.nix
   ];
 
   programs.home-manager.enable = true;

@@ -218,10 +218,22 @@ confirmed working (no permission errors).
       tmux's default shell, SSH sessions, and Terminal.app.)
 - [ ] `programs.git` (incl. `includeIf "gitdir:"` fragment setting
       `core.hooksPath = .githooks` for this repo — makes the gitleaks hook
-      activation declarative per machine), `programs.ssh`, `programs.tmux`,
+      activation declarative per machine), `programs.ssh`,
       `programs.vim` (plugins from `pkgs.vimPlugins`; existing vimrc sourced as
       plain file initially), `programs.direnv` +
       nix-direnv (also puts the devShell's gitleaks on PATH for the hook).
+- [x] **tmux** *(config slice done 2026-08-18)*: `~/configs/tmux/.tmux.conf`
+      reviewed against the 3.6a man page, ported to `programs.tmux` in
+      `modules/home/tmux.nix` (exported as `homeModules.tmux`). Deltas:
+      `default-terminal` xterm-256color → tmux-256color (man requires a
+      screen/tmux derivative; macOS ships the entry); truecolor via
+      `terminal-features ",alacritty:RGB"` (alacritty's terminfo lacks RGB —
+      the old `xterm*` pattern never matched the new outer); focus-events on;
+      brew bash → `bashInteractive`; redundant defaults dropped. Copy-mode
+      `y` should now reach the macOS clipboard via OSC 52 (alacritty `Ms` +
+      `set-clipboard external`) — verify. After switch: delete the
+      `~/.tmux.conf` symlink (found before HM's XDG file) and
+      `tmux kill-server` once. Bindings-quirks review = open offer.
 - [x] Alacritty **app** from nixpkgs *(pulled forward 2026-08-18: 0.17.0 via
       `home.packages` + default copyApps; the manual 0.12.2 in /Applications
       stays side-by-side until confidence, then gets deleted)*. **Config slice
