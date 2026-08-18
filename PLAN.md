@@ -34,7 +34,7 @@ principles here say *why*, that file says *how*.
 | User config | home-manager **as nix-darwin module** | One command, one lock, one GC, atomic generations. Flip to standalone per-machine only if no-Touch-ID password friction grates (work machine candidate). |
 | nixpkgs | **26.05 release train**: `nixpkgs-26.05-darwin` + matched `nix-darwin-26.05` + HM `release-26.05`; weekly lock bumps via `update-flake-lock` action | Flipped from unstable 2026-08-15, pre-payload ("zero to unstable felt iffy"). Darwin-tested stable channel; train bump = twice-yearly deliberate chore (26.11 due ~Nov 2026; 26.05 EOL ~Dec 2026). Escape hatches: flip to unstable (3 input lines) if a forced macOS update needs master-only fixes; surgical secondary unstable input if package freshness hurts (Phase 4). |
 | GUI apps | Homebrew casks via nix-darwin + **nix-homebrew** (taps pinned as flake inputs, `autoMigrate` adopts existing install) | Casks for self-updating/permission-heavy apps; nixpkgs + mac-app-util for stable dev GUI (Alacritty). |
-| Spotlight/Dock fix | ~~mac-app-util module~~ — dropped 2026-08, functionality upstreamed | Was: trampolines fixing Spotlight/Dock/TCC for nix-installed .apps. Verify the built-in equivalent when Phase 4 puts Alacritty in from nixpkgs. |
+| Spotlight/Dock fix | Built-in successors to mac-app-util, verified 2026-08-18 against 26.05 sources: HM `targets.darwin.copyApps` (default on `home.stateVersion` ≥ 25.11) copies `home.packages` apps to `~/Applications/Home Manager Apps`; nix-darwin copies `environment.systemPackages` apps to `/Applications/Nix Apps` | Real copies → Spotlight indexing, stable Dock pins, sane TCC. Caveat: updating an existing copied bundle may raise a one-time App Management permission prompt for the terminal running the switch. |
 | Secrets | 1Password-first runtime references (`op`, SSH agent); **nothing in repo/store**; sops-nix deferred until first server/VM | gitleaks pre-commit as seatbelt. Bitwarden = second domain; vaultwarden self-host option later. |
 | Browsers | **Both first-class.** Chrome: cask + declared policy baseline (G Suite daily driver). Firefox: cask app + full `programs.firefox` config (profile, user.js, NUR extensions). | Both self-update (appliance tier). Never install browsers from nixpkgs on macOS. |
 | AI harnesses | Native self-updating installers, bootstrapped by activation script; configs (`~/.claude/settings.json` etc.) HM-linked per-file | Binary = appliance; config = code. |
@@ -83,6 +83,9 @@ The justfile resolves the alias (env var `NIXHOST` or `hostname -s` mapping).
 - [ ] Inventory into repo as raw material: `brew bundle dump`, `ls /Applications`,
       current dotfiles (`.bashrc`, `.vimrc`, `.tmux.conf`, karabiner.json, ssh config),
       interesting `defaults` domains, any existing nix.
+      *(Now the main Phase 0 leftover — do before Phase 3's nix-homebrew
+      autoMigrate; it's the raw material for Phase 5 reconciliation. The brew
+      formula set already shrank by nine on 2026-08-18.)*
 - [ ] Time Machine snapshot. *(Skipped ahead of the Nix seed — installer is
       receipt-reversible; still wanted before Phase 2 root activation.)*
 - [x] Create **public** GitHub repo: **`nix-macos-config`** (this repo) — plan +
@@ -110,8 +113,9 @@ The justfile resolves the alias (env var `NIXHOST` or `hostname -s` mapping).
       `system.stateVersion = 7`) lives in `hosts/work.nix`.
 - [x] Home-manager wired as nix-darwin module; first payload = karabiner
       (pulled forward from Phase 2, see there).
-- [x] `justfile` (`switch`, `build`, `check`, `update`, `gc`; host via `NIXHOST`,
-      default `work`) + gitleaks CI backstop *(2026-08-16)*. `just` + `gitleaks`
+- [x] `justfile` (`switch`, `build`, `check`, `update`, `gc`, and since
+      2026-08-18 `fmt` → `nix fmt` with `formatter` = nixfmt-tree; host via
+      `NIXHOST`, default `work`) + gitleaks CI backstop *(2026-08-16)*. `just` + `gitleaks`
       added to `home.packages`. Deliberately deferred to a future **PR-guards
       pass**: the `update-flake-lock` weekly bot (solo workflow = `just update`
       + local rebuild review, so the bot saves nothing yet) and the CI eval
@@ -126,7 +130,7 @@ The justfile resolves the alias (env var `NIXHOST` or `hostname -s` mapping).
 bot PR pipeline — re-scoped 2026-08-16 (deferred to the PR-guards pass).
 **Phase 1 complete** (CLAUDE.md landed 2026-08-18).
 
-## Phase 2 — Input layer: Programmer Dvorak + Karabiner ☐
+## Phase 2 — Input layer: Programmer Dvorak + Karabiner — **functionally complete 2026-08-18** ☑
 
 Goal: both active **at the login window** (FileVault pre-boot stays QWERTY — EFI,
 unavoidable; type that password in QWERTY).
@@ -174,7 +178,9 @@ unavoidable; type that password in QWERTY).
 
 **Gate:** layout selectable and Karabiner remapping live at the login window ☑
 *(logout test passed 2026-08-18; FileVault pre-boot stays QWERTY as expected)*;
-survive reboot + converge-after-edit — pending incidental verification.
+converge-after-edit ☑ *(proven repeatedly during the config review — every
+karabiner.json iteration switched cleanly)*; reboot survival ☐ — verify at the
+next natural reboot, no dedicated test needed.
 
 ## Phase 3 — App layer: casks, browsers, password managers ☐
 
@@ -212,14 +218,20 @@ confirmed working (no permission errors).
       `programs.vim` (plugins from `pkgs.vimPlugins`; existing vimrc sourced as
       plain file initially), `programs.alacritty` (config), `programs.direnv` +
       nix-direnv (also puts the devShell's gitleaks on PATH for the hook).
-- [ ] Alacritty **app** from nixpkgs (pinned; version+config together);
-      mac-app-util makes it Spotlight-visible.
+- [x] Alacritty **app** from nixpkgs *(pulled forward 2026-08-18: 0.17.0 via
+      `home.packages` + default copyApps; the manual 0.12.2 in /Applications
+      stays side-by-side until confidence, then gets deleted)*. Config remains
+      this phase's slice: `programs.alacritty` — the existing `~/.alacritty.yml`
+      is pre-TOML (0.13 cutover) so the new app runs stock until the config is
+      reviewed/revamped here; the old app keeps its YAML meanwhile.
 - [ ] Staples from nixpkgs: `nodejs`, `deno`, `bun`, `go`, `kubectl`
       (+ per-project versions via dev shells/direnv when needed).
-      *(Pulled forward 2026-08-18: `fzf`, `git`, `glow`, `ripgrep`, `tmux` as
-      packages-only in `modules/home/pkgs.nix` — locked-nixpkgs versions beat
-      the stale brew set on all five; configs still land here in Phase 4;
-      brew formulae shadow the nix copies until uninstalled.)*
+      *(Pulled forward 2026-08-18: `fzf`, `git`, `glow`, `ripgrep`, `tmux`,
+      `jq`, `yq-go`, `htop`, `gh` as packages-only in `modules/home/pkgs.nix` —
+      locked-nixpkgs versions beat the stale brew set on all nine; the brew
+      formulae were uninstalled, so the nix copies are live. Configs still land
+      here in Phase 4. GNU coreutils deliberately deferred to the shell work —
+      unprefixed BSD→GNU userland flip is a decision, not a package add.)*
 - [ ] Existing dotfiles migrated per preference order (HM module first; plain-file
       escape hatch where translation isn't worth it). Iterate-heavy configs may use
       `mkOutOfStoreSymlink` for edit-without-rebuild.
@@ -235,7 +247,9 @@ confirmed working (no permission errors).
       WG-installer run · TCC grants (Karabiner) · input source + logout ·
       `chsh` · 1Password sign-in · browser sign-ins · harness login ·
       `git config core.hooksPath .githooks` until Phase 4 makes it declarative.
-- [ ] gitleaks hook verified; README documents the appliance tier + secrets rules.
+- [ ] README documents the appliance tier. *(Already done: gitleaks hook
+      verified 2026-08-15 via refusal test; secrets rules documented in
+      README + CLAUDE.md.)*
 
 **Gate:** zap-mode rebuild changes nothing; checklist tested mentally against a
 hypothetical fresh machine.

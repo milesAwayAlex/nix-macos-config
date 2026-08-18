@@ -5,6 +5,7 @@
 { pkgs, ... }:
 {
   home.packages = with pkgs; [
+    alacritty
     fzf
     gh
     git
