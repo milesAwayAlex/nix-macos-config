@@ -23,6 +23,17 @@ machine yet.
 After the first `darwin-rebuild switch`, nix-darwin (`nix.package`) owns the
 running Nix; the installer's remaining job is the uninstall receipt.
 
+## Workflow
+
+Day-to-day operations are `just` recipes; the host is selected via `NIXHOST`
+(default `work`):
+
+    just switch   # apply the configuration (sudo)
+    just build    # build without activating; leaves ./result
+    just check    # fast eval sanity check
+    just update   # bump flake.lock (or one input: `just update nixpkgs`)
+    just gc       # collect garbage per the 14d policy
+
 ## Per-clone setup
 
 Hooks are versioned in `.githooks/`, but git never auto-activates hooks from a

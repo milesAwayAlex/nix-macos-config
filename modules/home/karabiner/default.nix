@@ -3,6 +3,8 @@
 # link with a plain file (both confirmed by live test, 2026-08-15) — so
 # converge a real writable file instead. The repo copy is canonical: drift
 # in the live file is overwritten on every switch.
+# Convention: comparison tools are store-pinned (diffutils); POSIX-universal
+# basics ride the activation PATH bare.
 { lib, pkgs, ... }:
 {
   home.activation.karabinerConfig = lib.hm.dag.entryAfter [ "writeBoundary" ] ''

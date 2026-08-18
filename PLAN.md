@@ -127,18 +127,17 @@ bot PR pipeline — re-scoped 2026-08-16 (deferred to the PR-guards pass).
 Goal: both active **at the login window** (FileVault pre-boot stays QWERTY — EFI,
 unavoidable; type that password in QWERTY).
 
-- [ ] Vendor `ProgrammerDvorak.keylayout` XML in repo (extract from Kaufmann pkg or
-      community copy; it's reviewable XML). TODO: pick exact variant.
-- [ ] System-wide install via root activation:
-  ```nix
-  system.activationScripts.postActivation.text = ''
-    cp -f ${./keyboard/ProgrammerDvorak.keylayout} \
-      "/Library/Keyboard Layouts/ProgrammerDvorak.keylayout"
-  '';
-  ```
-- [ ] Login-window input menu declaratively
-      (`/Library/Preferences/com.apple.loginwindow showInputMenu = true` —
-      via `system.defaults` or `CustomSystemPreferences`; verify exact key).
+- [x] Vendor the layout *(2026-08-17)*: `modules/darwin/input/programmer-dvorak.bundle`
+      — Kaufmann's official macOS distribution (`ProgrammerDvorak-1_2_13.pkg.zip`,
+      sha256 verified against the Homebrew cask pin, payload byte-identical to
+      the bundle already installed on `work`). Resolves the pick-a-variant TODO.
+      (A `programmer-dvorak` cask exists as the alternative; vendoring chosen —
+      reviewable XML, no homebrew dependency, static artifact.)
+- [x] System-wide install via root activation (`modules/darwin/input`):
+      diff-guarded `cp -R` to `/Library/Keyboard Layouts/Programmer Dvorak.bundle`.
+- [x] Login-window input menu:
+      `system.defaults.CustomSystemPreferences."com.apple.loginwindow".showInputMenu`
+      (nix-darwin has no typed option for it — checked against 26.05 source).
 - [ ] Karabiner-Elements app: currently a manually-installed bundle (brew cask was
       broken at install time) — adopt as cask in Phase 3 (`--force`/adopt moment;
       recheck whether the cask works).
@@ -160,9 +159,11 @@ unavoidable; type that password in QWERTY).
       (cmd optional on i/m/h/b/p/n; excluded on f = fullscreen). Cheatsheet:
       `KEYBOARD.md`. **Cross-machine reuse live**: `old` imports
       `homeManagerModules.karabiner` via `home-manager.sharedModules`.
-- [ ] Pre-login remapping: activation step copying karabiner.json to Karabiner's
-      *system default configuration* path (automates the documented
-      "use before logging in" GUI button; verify path during implementation).
+- [x] Pre-login remapping *(2026-08-17)*: activation copies the repo
+      karabiner.json to `/Library/Application Support/org.pqrs/config/karabiner.json`
+      — path confirmed empirically (the GUI "use before login" button created it,
+      contents already identical to the repo). Activation owns the file now; the
+      GUI button is obsolete. Module exported as `darwinModules.input` for `old`.
 - [ ] Manual (checklist): approve system extension + Input Monitoring; enable
       input source in System Settings; log out/in.
 
@@ -266,11 +267,14 @@ hypothetical fresh machine.
 
 ## Open TODOs
 
-- [ ] Pick exact Programmer Dvorak keylayout variant + source.
+- [x] Pick exact Programmer Dvorak keylayout variant + source → official
+      Kaufmann 1.2.13 bundle, checksum-verified, vendored 2026-08-17.
 - [x] Karabiner config delivery mechanism → copy-on-activation (symlink refuted
       by live test on `work`, 2026-08-15; see Phase 2).
-- [ ] Verify: login-window input menu defaults key; Karabiner system-default config
-      path; 1Password Chrome extension ID; bash-from-nix login shell on MDM device.
+- [ ] Verify: 1Password Chrome extension ID; bash-from-nix login shell on MDM
+      device. *(Resolved 2026-08-17: login-window input-menu key =
+      `showInputMenu` via `CustomSystemPreferences`; Karabiner system config
+      path = `/Library/Application Support/org.pqrs/config/karabiner.json`.)*
 - [x] Decide repo name → **`nix-macos-config`** (github.com/milesAwayAlex).
 - [ ] Firefox user.js starting set (privacy baseline vs. vanilla).
 

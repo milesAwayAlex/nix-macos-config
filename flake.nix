@@ -29,6 +29,7 @@
       darwinConfigurations.work = nix-darwin.lib.darwinSystem {
         modules = [
           ./modules/darwin/core.nix
+          ./modules/darwin/input
           ./hosts/work.nix
           home-manager.darwinModules.home-manager
           {
@@ -39,9 +40,10 @@
         ];
       };
 
-      # Portable home modules, exported so other flakes (the `old` machine,
+      # Portable modules, exported so other flakes (the `old` machine,
       # pre-Phase-6) can consume them as an input.
       homeManagerModules.karabiner = ./modules/home/karabiner;
+      darwinModules.input = ./modules/darwin/input;
 
       devShells.${system}.default = pkgs.mkShell {
         packages = [
