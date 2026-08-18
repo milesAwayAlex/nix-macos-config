@@ -63,19 +63,15 @@
       bind -T copy-mode-vi v send -X begin-selection
       bind -T copy-mode-vi y send -X copy-selection
 
-      # Pane navigation and two-tier resize (fine: 1 cell, coarse: 5).
+      # Pane navigation and resize
       bind h select-pane -L
       bind j select-pane -D
       bind k select-pane -U
       bind l select-pane -R
-      bind -r H resize-pane -L
-      bind -r J resize-pane -D
-      bind -r K resize-pane -U
-      bind -r L resize-pane -R
-      bind -r C-h resize-pane -L 5
-      bind -r C-j resize-pane -D 5
-      bind -r C-k resize-pane -U 5
-      bind -r C-l resize-pane -R 5
+      bind -r H { resize-pane -L; display-message "#{pane_width}x#{pane_height}" }
+      bind -r J { resize-pane -D; display-message "#{pane_width}x#{pane_height}" }
+      bind -r K { resize-pane -U; display-message "#{pane_width}x#{pane_height}" }
+      bind -r L { resize-pane -R; display-message "#{pane_width}x#{pane_height}" }
     '';
   };
 }

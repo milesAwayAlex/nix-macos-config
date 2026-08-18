@@ -22,7 +22,6 @@
       };
 
       colors = {
-        draw_bold_text_with_bright_colors = true;
         primary = {
           background = "#0d0c13";
           foreground = "#ffbdec";
