@@ -112,3 +112,20 @@ harnesses.
 
 **Revisit when.** Phase 4's `programs.git` includeIf makes the activation
 declarative, or a hook needs ordering/multiplexing.
+
+## D8 — Flake module exports named by module class *(2026-08-18)*
+
+**Decision.** Exported module outputs are named after the module class they
+target: `homeModules.*` (home-manager) and `darwinModules.*` (nix-darwin),
+mirroring upstream's `nixosModules.*`. `homeManagerModules` is the legacy
+spelling this repo migrated from.
+
+**Why.** The class convention names the platform, not the implementing tool
+(nobody writes `nixDarwinModules`). Our pinned home-manager release documents
+`homeModules`, and flake-parts defines it as a typed option — the direction of
+travel. Verified 2026-08-18 that no tooling on our train treats either
+spelling specially (`nix flake show` marks both `unknown`), so the rename cost
+was purely the one consumer, coordinated at its next input bump.
+
+**Revisit when.** Nix's known-outputs list or the HM ecosystem blesses a
+different name.

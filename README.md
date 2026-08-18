@@ -48,14 +48,14 @@ this repo or the Nix store (PLAN.md, principle 5).
 
 ## Consuming modules from another flake
 
-Portable home modules are exported as `homeManagerModules.*`, so a machine not
+Portable home modules are exported as `homeModules.*`, so a machine not
 yet ported into this repo can reuse them:
 
     # flake.nix
     inputs.nix-macos-config.url = "github:milesAwayAlex/nix-macos-config";
 
     # anywhere in that flake's home-manager configuration
-    imports = [ inputs.nix-macos-config.homeManagerModules.karabiner ];
+    imports = [ inputs.nix-macos-config.homeModules.karabiner ];
 
 The karabiner module converges `~/.config/karabiner/karabiner.json` on
 activation (a copy, not a symlink — Karabiner mishandles symlinked config);

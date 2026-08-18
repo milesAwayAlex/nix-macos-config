@@ -48,7 +48,7 @@ principles here say *why*, that file says *how*.
 | Alias | Hardware | Status |
 |---|---|---|
 | `work` | This laptop, macOS 15.7.7 (Sequoia), **MDM-managed**, no Touch ID, Homebrew present | First target. Phase 0 MDM gate passed; Nix seeded 2026-08-15. |
-| `old` | Old laptop (personal), running its own flake-based nix-darwin + HM config | Host #2. **Live consumer since 2026-08-16**: imports `homeManagerModules.karabiner` via `home-manager.sharedModules`. Full port into this repo = Phase 6. |
+| `old` | Old laptop (personal), running its own flake-based nix-darwin + HM config | Host #2. **Live consumer since 2026-08-16**: imports `homeModules.karabiner` via `home-manager.sharedModules` (attrpath renamed per D8 — its flake adopts the new name at its next input bump). Full port into this repo = Phase 6. |
 
 Flake outputs are **alias-named** (`darwinConfigurations.work`, `.old`);
 `darwin-rebuild switch --flake ~/dotfiles#work` — hostname lookup is only a default.
@@ -106,7 +106,7 @@ The justfile resolves the alias (env var `NIXHOST` or `hostname -s` mapping).
       equivalent when Phase 4 installs nixpkgs GUI apps); nix-homebrew joins in
       Phase 3. Layout: `modules/darwin/core.nix` (portable policy),
       `modules/home/` (portable user config), `hosts/work.nix` (host identity).
-      Portable home modules exported as `homeManagerModules.*`.
+      Portable home modules exported as `homeModules.*` (naming per D8).
 - [x] Core nix settings — as planned, plus a reactive disk floor:
       `nix.settings.min-free` 10 GiB / `max-free` 20 GiB (`mkDefault`,
       host-tunable). Host identity (`system.primaryUser`, user home,
@@ -154,7 +154,7 @@ unavoidable; type that password in QWERTY).
       the link AND GUI edits replace the link. HM `home.activation` (after
       `writeBoundary`) converges a real writable file, `cmp`-guarded so no-op
       switches stay no-op; drift is overwritten on switch (noted in output).
-      Module: `modules/home/karabiner`, exported as `homeManagerModules.karabiner`.
+      Module: `modules/home/karabiner`, exported as `homeModules.karabiner`.
       Per-machine device blocks: ship the union of both machines' devices
       (entries for absent devices are inert). Nix-attrset `builtins.toJSON`
       generation stays the later option if real per-machine divergence appears.
@@ -166,7 +166,7 @@ unavoidable; type that password in QWERTY).
       ^W restored, ^U reimplemented as native cmd+⌫; deliberate ctrl+cmd layer
       (cmd optional on i/m/h/b/p/n; excluded on f = fullscreen). Cheatsheet:
       `KEYBOARD.md`. **Cross-machine reuse live**: `old` imports
-      `homeManagerModules.karabiner` via `home-manager.sharedModules`.
+      `homeModules.karabiner` via `home-manager.sharedModules`.
 - [x] Pre-login remapping *(2026-08-17)*: activation copies the repo
       karabiner.json to `/Library/Application Support/org.pqrs/config/karabiner.json`
       — path confirmed empirically (the GUI "use before login" button created it,
@@ -258,7 +258,7 @@ hypothetical fresh machine.
 
 - [ ] Port the old laptop's existing nix-darwin + HM config into this repo as
       `hosts/old.nix` (+ shared modules); `darwin-rebuild switch --flake .#old`.
-      Until then it consumes this repo's `homeManagerModules.*` as a flake input.
+      Until then it consumes this repo's `homeModules.*` as a flake input.
 - [ ] Add `security.pam.services.sudo_local.touchIdAuth = true` if it has Touch ID.
 - [ ] Converge; **diff the two machines' experience** — every gap found is a repo
       fix, not a local fix.
