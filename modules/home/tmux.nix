@@ -12,6 +12,7 @@
     enable = true;
     keyMode = "vi"; # covers both mode-keys and status-keys
     escapeTime = 50;
+    prefix = "C-Space";
     terminal = "tmux-256color";
     # Panes spawn this as login shells (tmux's empty default-command
     # semantics); the outer alacritty bash is non-login — pre-existing
@@ -31,6 +32,8 @@
       set -g status-justify centre
       set -g status-style bg=default,fg=brightblack
       set -g status-right "%H:%M"
+      # Prefix armed → asterisk beside the session tab.
+      set -g status-left "[#S] #{?client_prefix,* ,}"
       set -g pane-border-style fg=black
       set -g pane-active-border-style fg=brightgreen
       set -g window-status-activity-style fg=brightyellow
@@ -56,6 +59,13 @@
       bind N next-window -a
       bind P previous-window -a
       bind T swap-window -t 0
+
+      # Render clipboard markdown in an 80-column split (glow's layout
+      # assumes ~80), darwin-only.
+      bind g split-window -h -l 80 'pbpaste | ${pkgs.glow}/bin/glow -p -'
+
+      # Whole scrollback → macOS clipboard (sharing, feeding to Claude).
+      bind y { run-shell 'tmux capture-pane -p -S - | pbcopy'; display-message "scrollback copied" }
 
       # Copy-mode: vi select/yank; y stays in copy mode (deliberate, plain
       # copy-selection). set-clipboard's default (external) plus alacritty's

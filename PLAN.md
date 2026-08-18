@@ -234,6 +234,12 @@ confirmed working (no permission errors).
       `set-clipboard external`) — verify. After switch: delete the
       `~/.tmux.conf` symlink (found before HM's XDG file) and
       `tmux kill-server` once. Bindings-quirks review = open offer.
+      Tuning 2026-08-18: prefix → `C-Space` (C-b freed for apps; space-as-
+      shift means the chord lands on space release — rolling breaks it),
+      resize flashes the pane size, five-cell resize tier dropped, `prefix g`
+      renders clipboard markdown in an 80-column glow split, prefix-armed
+      asterisk beside the session tab in status-left, `prefix y` copies the
+      whole scrollback to the macOS clipboard.
 - [x] Alacritty **app** from nixpkgs *(pulled forward 2026-08-18: 0.17.0 via
       `home.packages` + default copyApps; the manual 0.12.2 in /Applications
       stays side-by-side until confidence, then gets deleted)*. **Config slice
