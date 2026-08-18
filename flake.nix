@@ -43,6 +43,7 @@
       # Portable modules, exported so other flakes (the `old` machine,
       # pre-Phase-6) can consume them as an input.
       homeManagerModules.karabiner = ./modules/home/karabiner;
+      homeManagerModules.packages = ./modules/home/pkgs.nix;
       darwinModules.input = ./modules/darwin/input;
 
       devShells.${system}.default = pkgs.mkShell {
