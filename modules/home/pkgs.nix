@@ -5,12 +5,12 @@
 { pkgs, ... }:
 {
   home.packages = with pkgs; [
-    alacritty
     fzf
     gh
     git
     gitleaks
     glow
+    hack-font # terminal font; HM copies it into ~/Library/Fonts/HomeManager
     htop
     jq
     just

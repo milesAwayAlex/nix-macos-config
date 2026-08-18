@@ -212,18 +212,26 @@ confirmed working (no permission errors).
 - [ ] **bash**: `programs.bash` in HM; `environment.shells = [ pkgs.bashInteractive ]`;
       manual once: `chsh -s /run/current-system/sw/bin/bash`.
       (Failure-mode note: if `/run` ever breaks, `/bin/bash` remains the rescue shell.)
+      (Login-shell status 2026-08-18: still `/bin/zsh`. Alacritty launches a
+      non-login `bashInteractive` directly via `terminal.shell`, so bash in the
+      terminal does not depend on this flip; the flip is what fixes `$SHELL`,
+      tmux's default shell, SSH sessions, and Terminal.app.)
 - [ ] `programs.git` (incl. `includeIf "gitdir:"` fragment setting
       `core.hooksPath = .githooks` for this repo — makes the gitleaks hook
       activation declarative per machine), `programs.ssh`, `programs.tmux`,
       `programs.vim` (plugins from `pkgs.vimPlugins`; existing vimrc sourced as
-      plain file initially), `programs.alacritty` (config), `programs.direnv` +
+      plain file initially), `programs.direnv` +
       nix-direnv (also puts the devShell's gitleaks on PATH for the hook).
 - [x] Alacritty **app** from nixpkgs *(pulled forward 2026-08-18: 0.17.0 via
       `home.packages` + default copyApps; the manual 0.12.2 in /Applications
-      stays side-by-side until confidence, then gets deleted)*. Config remains
-      this phase's slice: `programs.alacritty` — the existing `~/.alacritty.yml`
-      is pre-TOML (0.13 cutover) so the new app runs stock until the config is
-      reviewed/revamped here; the old app keeps its YAML meanwhile.
+      stays side-by-side until confidence, then gets deleted)*. **Config slice
+      done 2026-08-18**: the pre-TOML `~/.alacritty.yml` reviewed line-by-line
+      against the 0.17 man pages and ported to `programs.alacritty` in
+      `modules/home/alacritty.nix` (exported as `homeModules.alacritty`);
+      Hack provisioned via `hack-font` (HM copies fonts to
+      `~/Library/Fonts/HomeManager`). After confidence, deletable: the old
+      app, `~/.alacritty.yml` + `~/configs/alacritty/`, and the four manual
+      Hack TTFs in `~/Library/Fonts`.
 - [ ] Staples from nixpkgs: `nodejs`, `deno`, `bun`, `go`, `kubectl`
       (+ per-project versions via dev shells/direnv when needed).
       *(Pulled forward 2026-08-18: `fzf`, `git`, `glow`, `ripgrep`, `tmux`,

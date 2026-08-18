@@ -3,6 +3,7 @@
 {
   imports = [
     ./pkgs.nix
+    ./alacritty.nix
     ./karabiner
   ];
 
