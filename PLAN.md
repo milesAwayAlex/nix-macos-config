@@ -116,7 +116,7 @@ The justfile resolves the alias (env var `NIXHOST` or `hostname -s` mapping).
       pass**: the `update-flake-lock` weekly bot (solo workflow = `just update`
       + local rebuild review, so the bot saves nothing yet) and the CI eval
       check (free on a public repo, but low value pre-PR-guards).
-      `CLAUDE.md` still pending.
+      `CLAUDE.md` written 2026-08-18.
 - [x] First `sudo darwin-rebuild switch --flake .#work` *(2026-08-15)* — no
       /etc move-aside needed: nix-darwin's known-hash list silently adopted the
       installer's stock bashrc/zshrc/nix.conf.
@@ -124,7 +124,7 @@ The justfile resolves the alias (env var `NIXHOST` or `hostname -s` mapping).
 **Gate:** second switch is a no-op ☑; `nix.package` owns the running Nix ☑
 (nix 2.34.8 from 26.05 — below the 2.35.1 seed, expected on stable);
 bot PR pipeline — re-scoped 2026-08-16 (deferred to the PR-guards pass).
-**Phase 1 complete** modulo `CLAUDE.md`.
+**Phase 1 complete** (CLAUDE.md landed 2026-08-18).
 
 ## Phase 2 — Input layer: Programmer Dvorak + Karabiner ☐
 
@@ -168,11 +168,13 @@ unavoidable; type that password in QWERTY).
       — path confirmed empirically (the GUI "use before login" button created it,
       contents already identical to the repo). Activation owns the file now; the
       GUI button is obsolete. Module exported as `darwinModules.input` for `old`.
-- [ ] Manual (checklist): approve system extension + Input Monitoring; enable
-      input source in System Settings; log out/in.
+- [x] Manual (on `work`: all pre-existing — extension + Input Monitoring
+      approved in Phase 0, input source enabled). For fresh machines this
+      checklist moves to `BOOTSTRAP.md` (Phase 5).
 
-**Gate:** layout selectable and Karabiner remapping live at the login window;
-both survive reboot; `darwin-rebuild` after a keylayout/karabiner edit converges.
+**Gate:** layout selectable and Karabiner remapping live at the login window ☑
+*(logout test passed 2026-08-18; FileVault pre-boot stays QWERTY as expected)*;
+survive reboot + converge-after-edit — pending incidental verification.
 
 ## Phase 3 — App layer: casks, browsers, password managers ☐
 
@@ -214,6 +216,10 @@ confirmed working (no permission errors).
       mac-app-util makes it Spotlight-visible.
 - [ ] Staples from nixpkgs: `nodejs`, `deno`, `bun`, `go`, `kubectl`
       (+ per-project versions via dev shells/direnv when needed).
+      *(Pulled forward 2026-08-18: `fzf`, `git`, `glow`, `ripgrep`, `tmux` as
+      packages-only in `modules/home/pkgs.nix` — locked-nixpkgs versions beat
+      the stale brew set on all five; configs still land here in Phase 4;
+      brew formulae shadow the nix copies until uninstalled.)*
 - [ ] Existing dotfiles migrated per preference order (HM module first; plain-file
       escape hatch where translation isn't worth it). Iterate-heavy configs may use
       `mkOutOfStoreSymlink` for edit-without-rebuild.
