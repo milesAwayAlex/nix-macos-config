@@ -2,7 +2,8 @@
 
 Declarative macOS machine configuration: flake-based nix-darwin + home-manager,
 public from day one. The durable record of architecture decisions and the phased
-roadmap lives in [PLAN.md](PLAN.md). The Karabiner chord cheatsheet lives in
+roadmap lives in [PLAN.md](PLAN.md); operating conventions in
+[DECISIONS.md](DECISIONS.md); the Karabiner chord cheatsheet in
 [KEYBOARD.md](KEYBOARD.md).
 
 ## Status

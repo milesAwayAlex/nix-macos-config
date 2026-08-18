@@ -20,6 +20,10 @@ transition plan. The repo this plan produces is **public from day one**.
 5. **Host is the security boundary.** No secret ever enters the Nix store or the
    repo. VMs get forwarded/ephemeral credentials, never stored ones.
 
+Operating conventions (tool sourcing, file delivery, layout, GC, vendoring,
+updates, hooks) are recorded ADR-style in [DECISIONS.md](DECISIONS.md) —
+principles here say *why*, that file says *how*.
+
 ## Stack decisions (settled)
 
 | Layer | Choice | Key rationale |
