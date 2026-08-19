@@ -151,3 +151,25 @@ with a defined precedence.
 
 **Revisit when.** An IT-pushed key starts overriding something we care
 about (then: contest it per-repo with local config, or negotiate with IT).
+
+## D10 — Shell config: HM owns the bash files, `~/.bashrc.local` is the machine's *(2026-08-18)*
+
+**Decision.** `programs.bash` owns `.bashrc`/`.bash_profile`/`.profile`/
+`.bash_logout`. The last line of the managed bashrc sources
+`~/.bashrc.local` if present — an unmanaged, machine-local file for IT/EDR
+cert exports (Aikido) and parked per-machine tooling (nvm, gcloud, deno,
+Spacelift-after-rotation, Postgres PATH). Secrets never go in managed shell
+files; ambient-env secrets move to 1Password wiring when that step lands.
+
+**Why.** Same split as D9, adapted: bash has no native two-global-files
+mechanism, so the hook provides one. Aikido rewrites shell rc files in
+place (observed 2026-08-18) — HM ownership without a hook would either lose
+those writes or clobber-loop.
+
+**Known failure mode.** Aikido updates target `.bashrc`/`.profile` directly;
+against HM's read-only symlinks that fails or replaces the link. The next
+`just switch` then complains ("existing file in the way") — the fix is
+moving the fresh Aikido block into `~/.bashrc.local` and re-switching.
+
+**Revisit when.** Aikido's write behavior turns out to be more aggressive
+than observed, or the 1Password/secrets step re-homes the parked tooling.

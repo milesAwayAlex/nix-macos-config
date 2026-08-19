@@ -6,11 +6,6 @@ roadmap lives in [PLAN.md](PLAN.md); operating conventions in
 [DECISIONS.md](DECISIONS.md); the Karabiner chord cheatsheet in
 [KEYBOARD.md](KEYBOARD.md).
 
-## Status
-
-Phase 1 (seed + skeleton) in progress on `work`. Nothing here configures a
-machine yet.
-
 ## Seed record
 
 | | |
@@ -37,14 +32,26 @@ Day-to-day operations are `just` recipes; the host is selected via `NIXHOST`
 
 ## Per-clone setup
 
-Hooks are versioned in `.githooks/`, but git never auto-activates hooks from a
-clone. Enable them once per clone:
+Hooks are versioned in `.githooks/`. On a machine running this repo's
+home-manager config, they activate automatically — the managed git config
+recognizes any clone of this repo by its remote URL and sets
+`core.hooksPath` (D7/D9). Elsewhere, enable them once per clone:
 
     git config core.hooksPath .githooks
 
 The pre-commit hook runs gitleaks against staged changes and refuses commits
 containing secrets. It is the seatbelt, not the strategy: no secret ever enters
 this repo or the Nix store (PLAN.md, principle 5).
+
+## Per-machine manual steps
+
+After the first successful `just switch` on a new machine:
+
+    chsh -s /run/current-system/sw/bin/bash
+
+The switch itself registers nix bash in `/etc/shells`
+(`environment.shells`); the flip is the one step nix-darwin doesn't do for
+us. If `/run` is ever broken, `/bin/bash` remains the rescue shell.
 
 ## Consuming modules from another flake
 

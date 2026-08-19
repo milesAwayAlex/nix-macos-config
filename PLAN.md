@@ -209,17 +209,33 @@ confirmed working (no permission errors).
 
 ## Phase 4 — Shell + CLI environment ☐
 
-- [ ] **bash**: `programs.bash` in HM; `environment.shells = [ pkgs.bashInteractive ]`;
-      manual once: `chsh -s /run/current-system/sw/bin/bash`.
-      (Failure-mode note: if `/run` ever breaks, `/bin/bash` remains the rescue shell.)
-      (Login-shell status 2026-08-18: still `/bin/zsh`. Alacritty launches a
-      non-login `bashInteractive` directly via `terminal.shell`, so bash in the
-      terminal does not depend on this flip; the flip is what fixes `$SHELL`,
-      tmux's default shell, SSH sessions, and Terminal.app.)
-- [ ] `programs.ssh`,
-      `programs.vim` (plugins from `pkgs.vimPlugins`; existing vimrc sourced as
-      plain file initially), `programs.direnv` +
-      nix-direnv (also puts the devShell's gitleaks on PATH for the hook).
+- [x] **bash + ssh** *(config slice done 2026-08-18)*: `~/configs/bashconf`
+      reviewed line-by-line → `programs.bash` + `programs.readline` in
+      `modules/home/bash/` (prompt sanitized into `prompt.bash`; `history -a`
+      added for cross-tmux-pane history; HISTSIZE 100k). 🔴 Review found a
+      live Spacelift API key + a commented `ghp_` PAT exported in the tracked
+      `.bashrc` of the **public** configs repo — never committed (verified
+      `log -S` empty), rotation on Alex; Spacelift stays machine-local until
+      the 1Password step. Machine-local hook = `~/.bashrc.local` (**D10**):
+      Aikido cert blocks, nvm, gcloud (Phase 3), deno, Postgres PATH
+      (postgres itself deferred; the line only provides psql). Dropped:
+      Intel brew + `ibrew`, jenv, tabtab, Rancher PATH, cargo, vendored 2023
+      completions (nix bash-completion framework instead — test lazy-load,
+      may need darwin `environment.pathsToLink`). PATH: own bins prepended,
+      brew appended — nix wins by construction. `programs.ssh` in
+      `modules/home/ssh.nix` (`settings` shape; ControlPath moved from a
+      predictable /tmp name to hashed `~/.ssh/cm-%C`). Login-shell flip:
+      `environment.shells = [ pkgs.bashInteractive ]` in darwin core;
+      manual once: `chsh -s /run/current-system/sw/bin/bash` (if `/run` ever
+      breaks, `/bin/bash` remains the rescue shell). Pre-switch: populate
+      `~/.bashrc.local`, then remove `~/.bashrc` `~/.bash_profile`
+      `~/.profile` `~/.inputrc` `~/.ssh/config`.
+- [ ] `programs.vim` (plugins from `pkgs.vimPlugins`; existing vimrc sourced
+      as plain file initially).
+- direnv + nix-direnv **parked 2026-08-18** (was never installed — a proposed
+      addition, not a port; gitleaks/just are global via `home.packages`, so
+      the hook needs nothing). Revisit when a real per-project-toolchain need
+      appears at work (auto-loading devShells per repo).
 - [x] **git** *(config slice done 2026-08-18)*: `~/.gitconfig` reviewed
       line-by-line against the 2.54 man pages, ported to `programs.git` in
       `modules/home/git.nix` (exported as `homeModules.git`). Kept: identity

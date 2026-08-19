@@ -1,8 +1,13 @@
 # Portable system layer: nix-darwin manages Nix itself; upgrades ride the
 # rebuild train (PLAN.md, interpreter row).
-{ lib, ... }:
+{ lib, pkgs, ... }:
 {
   nix.enable = true;
+
+  # The per-user flip is the manual step, once per machine (README):
+  # `chsh -s /run/current-system/sw/bin/bash`. If /run ever breaks,
+  # /bin/bash remains the rescue shell.
+  environment.shells = [ pkgs.bashInteractive ];
 
   nix.settings.experimental-features = [
     "nix-command"
