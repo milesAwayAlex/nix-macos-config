@@ -43,6 +43,7 @@
       # Portable modules, exported so other flakes (the `old` machine,
       # pre-Phase-6) can consume them as an input.
       homeModules.alacritty = ./modules/home/alacritty.nix;
+      homeModules.git = ./modules/home/git.nix;
       homeModules.karabiner = ./modules/home/karabiner;
       homeModules.packages = ./modules/home/pkgs.nix;
       homeModules.tmux = ./modules/home/tmux.nix;

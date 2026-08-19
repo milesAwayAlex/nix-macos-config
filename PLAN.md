@@ -216,12 +216,25 @@ confirmed working (no permission errors).
       non-login `bashInteractive` directly via `terminal.shell`, so bash in the
       terminal does not depend on this flip; the flip is what fixes `$SHELL`,
       tmux's default shell, SSH sessions, and Terminal.app.)
-- [ ] `programs.git` (incl. `includeIf "gitdir:"` fragment setting
-      `core.hooksPath = .githooks` for this repo — makes the gitleaks hook
-      activation declarative per machine), `programs.ssh`,
+- [ ] `programs.ssh`,
       `programs.vim` (plugins from `pkgs.vimPlugins`; existing vimrc sourced as
       plain file initially), `programs.direnv` +
       nix-direnv (also puts the devShell's gitleaks on PATH for the hook).
+- [x] **git** *(config slice done 2026-08-18)*: `~/.gitconfig` reviewed
+      line-by-line against the 2.54 man pages, ported to `programs.git` in
+      `modules/home/git.nix` (exported as `homeModules.git`). Kept: identity
+      (public since commit 1 anyway), untrackedCache / parallel checkout /
+      writeCommitGraph / pack.threads; added: `init.defaultBranch main`,
+      `pull.ff only`, zdiff3, histogram. Dropped: 2.54-default fossils,
+      `gc.auto=10` (near-constant gc), brew-gh credential helpers (SSH-only
+      now). Hook activation now declarative via a `hasconfig:remote.*.url`
+      include (retires D7's manual step). `~/.gitconfig` surrendered to
+      IT/machine-local entries per **D9** — post-switch, trim it to the
+      Aikido `http.sslCAInfo` line; pre-switch, delete `~/.config/git/ignore`
+      (its one Claude-Code-written line moved into `programs.git.ignores`).
+      Deferred: commit signing (own step later); `git maintenance` skipped
+      (HM support is systemd-only; default gc cadence suffices); rerere
+      skipped (repeated-rebase workflows absent).
 - [x] **tmux** *(config slice done 2026-08-18)*: `~/configs/tmux/.tmux.conf`
       reviewed against the 3.6a man page, ported to `programs.tmux` in
       `modules/home/tmux.nix` (exported as `homeModules.tmux`). Deltas:

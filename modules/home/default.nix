@@ -4,6 +4,7 @@
   imports = [
     ./pkgs.nix
     ./alacritty.nix
+    ./git.nix
     ./karabiner
     ./tmux.nix
   ];

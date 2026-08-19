@@ -113,6 +113,12 @@ harnesses.
 **Revisit when.** Phase 4's `programs.git` includeIf makes the activation
 declarative, or a hook needs ordering/multiplexing.
 
+**Update 2026-08-18.** Activation is now declarative on HM-configured
+machines: a `hasconfig:remote.*.url` include in `modules/home/git.nix` sets
+`core.hooksPath` for any clone of this repo (D9). The manual `git config`
+line remains only for machines without this HM config. The versioned-hooks
+convention itself stands.
+
 ## D8 — Flake module exports named by module class *(2026-08-18)*
 
 **Decision.** Exported module outputs are named after the module class they
@@ -129,3 +135,19 @@ was purely the one consumer, coordinated at its next input bump.
 
 **Revisit when.** Nix's known-outputs list or the HM ecosystem blesses a
 different name.
+
+## D9 — Git global config: HM owns the XDG file, `~/.gitconfig` is the machine's *(2026-08-18)*
+
+**Decision.** Declarative git config lives in `~/.config/git/config`
+(`programs.git`). `~/.gitconfig` is deliberately unmanaged — reserved for
+machine-local and IT/EDR-pushed entries (on `work`: Aikido's
+`http.sslCAInfo`). Git reads it after the XDG file, so its keys override
+ours by design.
+
+**Why.** IT tooling rewrites `~/.gitconfig` (observed 2026-08-17); managing
+that file declaratively would be a tug-of-war. The two-file split gives HM
+full ownership of one file and the machine full ownership of the other,
+with a defined precedence.
+
+**Revisit when.** An IT-pushed key starts overriding something we care
+about (then: contest it per-repo with local config, or negotiate with IT).

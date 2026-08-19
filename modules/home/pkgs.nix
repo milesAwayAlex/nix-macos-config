@@ -7,7 +7,6 @@
   home.packages = with pkgs; [
     fzf
     gh
-    git
     gitleaks
     glow
     hack-font # terminal font; HM copies it into ~/Library/Fonts/HomeManager
