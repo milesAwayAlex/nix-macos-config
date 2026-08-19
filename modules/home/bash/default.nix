@@ -3,6 +3,15 @@
   programs.bash = {
     enable = true;
 
+    # Non-login interactive shells (Alacritty's) read only ~/.bashrc, so the
+    # nix environment (PATH, XDG_DATA_DIRS for completions) must be pulled in
+    # here; login shells get it via /etc/profile and skip this thanks to
+    # set-environment's own guard variable. Placed in bashrcExtra so it runs
+    # before the completion loader.
+    bashrcExtra = ''
+      [ -r /etc/bashrc ] && . /etc/bashrc
+    '';
+
     historySize = 100000;
     historyFileSize = 100000;
     historyControl = [

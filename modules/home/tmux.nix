@@ -14,14 +14,19 @@
     escapeTime = 50;
     prefix = "C-Space";
     terminal = "tmux-256color";
-    # Panes spawn this as login shells (tmux's empty default-command
-    # semantics); the outer alacritty bash is non-login — pre-existing
-    # asymmetry, to be rationalized by the bash slice.
+    # Panes spawn this as login shells
+    # (tmux's empty default-command semantics)
     shell = "${pkgs.bashInteractive}/bin/bash";
     focusEvents = true;
     extraConfig = ''
       # Truecolor through the alacritty outer (its terminfo has no RGB cap).
       set -as terminal-features ",alacritty:RGB"
+
+      # macOS path_helper demotes nix dirs in login panes, and the inherited
+      # guard makes nix-darwin's set-environment skip the rebuild — so
+      # /usr/bin/git shadows nix git. Strip the guard: each pane re-runs
+      # set-environment and gets the canonical nix-first PATH.
+      set-environment -gr __NIX_DARWIN_SET_ENVIRONMENT_DONE
 
       set -g renumber-windows on
       set -g monitor-activity on

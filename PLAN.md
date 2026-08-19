@@ -229,7 +229,16 @@ confirmed working (no permission errors).
       manual once: `chsh -s /run/current-system/sw/bin/bash` (if `/run` ever
       breaks, `/bin/bash` remains the rescue shell). Pre-switch: populate
       `~/.bashrc.local`, then remove `~/.bashrc` `~/.bash_profile`
-      `~/.profile` `~/.inputrc` `~/.ssh/config`.
+      `~/.profile` `~/.inputrc` `~/.ssh/config`. Post-slice fixes
+      2026-08-18: guarded `. /etc/bashrc` in bashrcExtra (non-login shells
+      otherwise get no nix env) and tmux `set-environment -gr` on the
+      set-environment guard (path_helper demotes nix dirs in login panes
+      while the inherited guard blocks the rebuild — /usr/bin/git had been
+      shadowing nix git inside tmux since the brew uninstall). Then
+      **standardized all interactive shells on login**: alacritty passes
+      `--login` (was a ported accident of the old config); tmux panes were
+      already login-by-default; both fixes remain as armor for stray
+      non-login shells.
 - [ ] `programs.vim` (plugins from `pkgs.vimPlugins`; existing vimrc sourced
       as plain file initially).
 - direnv + nix-direnv **parked 2026-08-18** (was never installed — a proposed

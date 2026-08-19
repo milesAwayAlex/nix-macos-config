@@ -52,10 +52,12 @@
         };
       };
 
-      # Non-login interactive bash, matching pre-port behavior. The login
-      # shell is still /bin/zsh until the Phase 4 bash slice flips it — this
-      # line is what puts bash in the terminal meanwhile.
-      terminal.shell.program = "${pkgs.bashInteractive}/bin/bash";
+      # Login bash macOS GUI apps inherit launchd's empty env, so each window
+      # bootstraps a full session via /etc/profile, macOS-terminal style.
+      terminal.shell = {
+        program = "${pkgs.bashInteractive}/bin/bash";
+        args = [ "--login" ];
+      };
 
       mouse.hide_when_typing = true;
 
