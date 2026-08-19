@@ -232,9 +232,20 @@ confirmed working (no permission errors).
       IT/machine-local entries per **D9** — post-switch, trim it to the
       Aikido `http.sslCAInfo` line; pre-switch, delete `~/.config/git/ignore`
       (its one Claude-Code-written line moved into `programs.git.ignores`).
-      Deferred: commit signing (own step later); `git maintenance` skipped
+      Deferred: commit signing (own step later — when it lands, also add a
+      signature-required rule to the GitHub ruleset); `git maintenance` skipped
       (HM support is systemd-only; default gc cadence suffices); rerere
       skipped (repeated-rebase workflows absent).
+- [x] **GitHub repo hardening** *(2026-08-18, during the git slice)*: default
+      branch renamed `master` → `main` (GitHub redirects old URLs; repo text
+      was already branch-agnostic; on `old`, verify the flake input carries
+      no `?ref=master` before its next update); ruleset
+      `protect-default-branch` blocks force-push and deletion, targeting the
+      default branch symbolically; wiki + projects disabled. Confirmed
+      already-good: secret scanning + push protection enabled (GitHub = third
+      seatbelt after hook + CI), Actions `GITHUB_TOKEN` read-only, sole
+      collaborator, no deploy keys or webhooks. Rest of the menu → the
+      PR-guards pass (backlog).
 - [x] **tmux** *(config slice done 2026-08-18)*: `~/configs/tmux/.tmux.conf`
       reviewed against the 3.6a man page, ported to `programs.tmux` in
       `modules/home/tmux.nix` (exported as `homeModules.tmux`). Deltas:
@@ -313,7 +324,11 @@ hypothetical fresh machine.
   `peter-evans/create-pull-request`; GITHUB_TOKEN-created PRs don't trigger
   workflows — needs a fine-grained PAT for CI-on-bot-PRs) + CI eval check
   (`nix eval .#darwinConfigurations.<host>.system.drvPath` on ubuntu; optional
-  full build on free arm64 macos runners).
+  full build on free arm64 macos runners). GitHub-side hardening scoped
+  2026-08-18: pin third-party actions by commit SHA (+ flip the repo's
+  `sha_pinning_required` toggle), Dependabot version updates for the
+  `github-actions` ecosystem (it can't track flake.lock), required status
+  checks once the eval check exists, `deleteBranchOnMerge`.
 - `nix.linux-builder` (sized: ~4 cores / 6 GB on small machines; launchd
   `ProcessType = "Interactive"`; aarch64-linux only — no x86 via QEMU).
 - colima (`--vm-type vz`) + docker CLI + k3d/kind for containers/k8s.
