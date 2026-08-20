@@ -173,3 +173,30 @@ moving the fresh Aikido block into `~/.bashrc.local` and re-switching.
 
 **Revisit when.** Aikido's write behavior turns out to be more aggressive
 than observed, or the 1Password/secrets step re-homes the parked tooling.
+
+## D11 — Out-of-nixpkgs vim plugins ride flake inputs *(2026-08-19)*
+
+**Decision.** Vim plugins deliberately kept outside nixpkgs (first:
+yegappan/lsp) are consumed as `flake = false` inputs and built inside the
+module with `vimUtils.buildVimPlugin`. The module stays a regular path
+export (`homeModules.vim`) and takes the plugin source as a module arg;
+each consuming flake supplies it via home-manager's `extraSpecialArgs`
+(`vim9-lsp = inputs.vim9-lsp;`). A consumer of the export reaches the
+exact pinned source transitively — on `old`:
+`inputs.nix-macos-config.inputs.vim9-lsp`. Bumping is `just update
+vim9-lsp`.
+
+**Why.** `flake.lock` is already this repo's pinning mechanism: the same
+deliberate update ritual as the release train, no fetchFromGitHub
+rev-and-hash surgery. Staying out of nixpkgs is a feature here — full
+control over the version of the plugin that defines the editing
+experience, decoupled from the D6 release train. A wrapper-module export
+(closing over the input via `_module.args`) was tried first and worked,
+but made vim a special case among otherwise-uniform path exports; one
+visible arg line per consumer is more transparent than one invisible
+wrapper.
+
+**Revisit when.** The plugin lands in nixpkgs (upstreaming intent noted in
+PLAN, after the dust settles), `old` is adopted into this flake (Phase 6 —
+both futures are intended), or the pattern multiplies — several
+arg-taking modules would argue for an overlay instead.

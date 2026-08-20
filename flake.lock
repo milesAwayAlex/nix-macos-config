@@ -62,7 +62,24 @@
       "inputs": {
         "home-manager": "home-manager",
         "nix-darwin": "nix-darwin",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "vim9-lsp": "vim9-lsp"
+      }
+    },
+    "vim9-lsp": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1786927582,
+        "narHash": "sha256-QgOzwzlMq+so4kEnSDAorH+bPIiJ+OaguBs91FNgpMg=",
+        "owner": "yegappan",
+        "repo": "lsp",
+        "rev": "33aef9d2f041d16f6e0c0adc9f486a5cf3724924",
+        "type": "github"
+      },
+      "original": {
+        "owner": "yegappan",
+        "repo": "lsp",
+        "type": "github"
       }
     }
   },

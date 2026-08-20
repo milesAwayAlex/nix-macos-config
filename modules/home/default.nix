@@ -9,6 +9,7 @@
     ./karabiner
     ./ssh.nix
     ./tmux.nix
+    ./vim
   ];
 
   programs.home-manager.enable = true;

@@ -40,7 +40,7 @@ principles here say *why*, that file says *how*.
 | AI harnesses | Native self-updating installers, bootstrapped by activation script; configs (`~/.claude/settings.json` etc.) HM-linked per-file | Binary = appliance; config = code. |
 | GC | `nix.gc.automatic`, `--delete-older-than 14d`, `nix.optimise.automatic` | Never bare `-d`. Module-mode HM = single profile chain. |
 | Shell | **bash** (modern bash 5 from nixpkgs as login shell; macOS ships 3.2) | `programs.bash` in HM; `/etc/shells` via `environment.shells`; one manual `chsh`. |
-| Editor | **vim** (`programs.vim`, plugins from `pkgs.vimPlugins`, large vimrc sourced as plain file) | Case-by-case escape hatch per principle 2. |
+| Editor | **vim** (`programs.vim`, plugins from `pkgs.vimPlugins`; LSP via yegappan/lsp, a flake input per D11) | Ported clean 2026-08-19 — the sourced-vimrc escape hatch proved unnecessary after the line-by-line review. |
 | Sudo ergonomics | Work machine: no Touch ID, no NOPASSWD (≈ passwordless root; unacceptable on managed hardware). Personal/old machine: `security.pam.services.sudo_local.touchIdAuth = true`. | Rebuilds are deliberate, infrequent events; browser security does NOT depend on rebuild cadence. |
 
 ## Machines
@@ -239,8 +239,36 @@ confirmed working (no permission errors).
       `--login` (was a ported accident of the old config); tmux panes were
       already login-by-default; both fixes remain as armor for stray
       non-login shells.
-- [ ] `programs.vim` (plugins from `pkgs.vimPlugins`; existing vimrc sourced
-      as plain file initially).
+- [x] **vim** *(core slice done 2026-08-19)*: the CoC-era `~/.vimrc`
+      (amix-derived) reviewed line-by-line and ported clean to
+      `programs.vim` in `modules/home/vim/` — settings in vim9script
+      `config.vim`, store paths handed over via `g:deps` (exported as
+      `homeModules.vim`; consumers pass the `vim9-lsp` flake input via
+      home-manager's `extraSpecialArgs`, D11). CoC, its 16 runtime-npm
+      extensions (679 MB in `~/.config/coc`), and the node host dropped;
+      LSP is yegappan/lsp (vim9script, in-process), with `nil` piloting on
+      nix files (`,f` formats through nixfmt via nil's external-formatter
+      hook). Kept: fugitive, gitgutter, surround, onedark (transparent
+      overrides), nerdtree; added fzf.vim (`^P` files, `,b` buffers, `,/`
+      ripgrep). Dropped: nerdcommenter (vim 9.1 ships a native `comment`
+      package if missed), polyglot (dormant since 2022; the 9.1 runtime is
+      fresher), prisma/snippets/emmet fossils, `lazyredraw`, the dead
+      `Ack`/`Bclose` helpers, the hand-rolled statusline (vim-sensible's
+      `laststatus=2` stands — revisit if it annoys). **Recovery world:**
+      the HM vim runs `-u <store vimrc>` and removes `~/.vim` from
+      packpath/runtimepath, so the old setup (`~/.vimrc` symlink +
+      `~/.vim/pack` clones) stays intact under `/usr/bin/vim` (plain `vi`
+      resolves to nix vim) until the post-confidence purge; the packpath
+      exclusion is permanent armor against manual installs leaking in.
+      Remaining vim slices: full server roster
+      (typescript-language-server, vscode-langservers-extracted,
+      yaml/bash language servers, terraform-ls) with per-buffer LSP maps
+      and the prettier/eslint story; a deliberate bindings/plugin-usage
+      review and controls overhaul (after everything else settles);
+      upstream yegappan/lsp to nixpkgs once
+      the dust settles (weeks out); the purge (rm the `~/.vimrc` symlink,
+      archive `~/.vim`, reclaim `~/.config/coc`, retire
+      `~/configs/vimconf`).
 - direnv + nix-direnv **parked 2026-08-18** (was never installed — a proposed
       addition, not a port; gitleaks/just are global via `home.packages`, so
       the hook needs nothing). Revisit when a real per-project-toolchain need

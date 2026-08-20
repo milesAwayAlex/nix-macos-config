@@ -12,6 +12,12 @@
       url = "github:nix-community/home-manager/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # yegappan/lsp, deliberately out-of-nixpkgs (D11). Pinned by flake.lock,
+    # independent of the release train; bump via `just update vim9-lsp`.
+    vim9-lsp = {
+      url = "github:yegappan/lsp";
+      flake = false;
+    };
   };
 
   outputs =
@@ -20,6 +26,7 @@
       nixpkgs,
       nix-darwin,
       home-manager,
+      ...
     }:
     let
       system = "aarch64-darwin";
@@ -36,6 +43,11 @@
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
             home-manager.users.alexm = import ./modules/home;
+            # vim.nix takes the plugin source as a module arg (D11);
+            # consumers of homeModules.vim pass their own.
+            home-manager.extraSpecialArgs = {
+              vim9-lsp = inputs.vim9-lsp;
+            };
           }
         ];
       };
@@ -49,6 +61,7 @@
       homeModules.packages = ./modules/home/pkgs.nix;
       homeModules.ssh = ./modules/home/ssh.nix;
       homeModules.tmux = ./modules/home/tmux.nix;
+      homeModules.vim = ./modules/home/vim;
       darwinModules.input = ./modules/darwin/input;
 
       devShells.${system}.default = pkgs.mkShell {

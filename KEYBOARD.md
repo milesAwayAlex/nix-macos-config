@@ -55,3 +55,33 @@ tab in the status bar means the prefix is armed.
 | `[` | copy mode - `v` select, `y` yank (stays in copy mode; yank lands on the macOS clipboard) |
 | `g` | render clipboard markdown in an 80-column glow split (`q` closes it) |
 | `y` | copy the pane's whole scrollback to the macOS clipboard |
+
+## Vim
+
+Every custom key from `modules/home/vim/config.vim`; leader is `,`.
+
+| Key | Result |
+|---|---|
+| `,w` | save |
+| `,<CR>` | clear search highlight |
+| `gb` / `gB` | next / previous buffer |
+| `,o` | new tab |
+| `,sp` | toggle spell check |
+| `*` / `#` (visual) | search down / up for the selection |
+| `^T` | NERDTree toggle |
+| `^P` | fzf file picker (`:Files`) |
+| `,b` | fzf buffer picker (`:Buffers`) |
+| `,/` | ripgrep the project (`:Rg`) |
+| `gd` / `gy` / `gi` / `gr` | goto definition / type definition / implementation / references |
+| `K` | hover documentation |
+| `,rn` | rename symbol |
+| `,n` / `,p` | next / previous diagnostic |
+| `,ld` | diagnostics list (`:LspDiag show`) |
+| `,f` | format buffer (normal) or selection (visual); nix goes through nixfmt |
+
+Insert/command mode: doubling `"` `'` `` ` `` `(` `[` `{` `<` closes the
+pair and lands the cursor inside; `(<CR>` `[<CR>` `{<CR>` open an indented
+block.
+
+Recovery: `/usr/bin/vim` runs the old CoC setup untouched — the full path
+is the escape hatch, since plain `vi` also resolves to the nix vim.
