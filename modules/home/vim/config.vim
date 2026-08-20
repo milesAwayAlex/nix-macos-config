@@ -31,6 +31,16 @@ set termguicolors
 # otherwise set laststatus=2).
 set laststatus=0
 
+# vim-helm only claims a template when Chart.yaml sits exactly one level
+# above templates/. Widen it: any yaml under a templates/ dir with a
+# Chart.yaml anywhere above. (:set ft=helm still works for odd layouts.)
+autocmd FileType yaml {
+  if expand('%:p') =~ '/templates/'
+        && findfile('Chart.yaml', expand('%:p:h') .. ';') != ''
+    &l:filetype = 'helm'
+  endif
+}
+
 # tmux focus-events feed FocusGained, so autoread actually fires.
 autocmd FocusGained,BufEnter * silent! checktime
 
@@ -87,11 +97,15 @@ var lspServers = [
     workspaceConfig: {nil: {formatting: {command: [g:deps.nixfmt]}}},
   },
   # Vim detects *.tf as 'tf', not 'terraform' — register both.
+  # Point it at tofu (terraform itself is unfree). Hover/definition on
+  # variables and attributes still need provider schemas, i.e. a `tofu init`
+  # in the workspace — without one only schema-free tokens resolve.
   {
     name: 'terraform',
     filetype: ['tf', 'terraform'],
     path: g:deps.terraform,
     args: ['serve'],
+    initializationOptions: {terraform: {path: g:deps.tofu}},
   },
   # deno lsp stays silent unless initializationOptions enables it. Brings
   # its own TypeScript, plus deno fmt/lint — no node anywhere.
@@ -100,7 +114,12 @@ var lspServers = [
     filetype: ['typescript', 'typescriptreact', 'javascript', 'javascriptreact'],
     path: g:deps.deno,
     args: ['lsp'],
+    # Both are needed: the plugin answers deno's workspace/configuration
+    # request from workspaceConfig, and an absent one reads as disabled —
+    # the server then advertises hover/definition but replies null to both
+    # (formatting still works, which makes it look half-broken).
     initializationOptions: {enable: true, lint: true},
+    workspaceConfig: {deno: {enable: true, lint: true}},
   },
   # Charts are ft=helm (vim-helm), so they never reach this one.
   {
@@ -160,6 +179,14 @@ var lspServers = [
     path: g:deps.docker,
     args: ['--stdio'],
   },
+  # Markdown nav/completion across files. It has no formatter — gq below
+  # covers that.
+  {
+    name: 'marksman',
+    filetype: 'markdown',
+    path: g:deps.marksman,
+    args: ['server'],
+  },
 ]
 autocmd User LspSetup call LspOptionsSet({autoHighlightDiags: true})
 autocmd User LspSetup call LspAddServer(lspServers)
@@ -167,6 +194,10 @@ autocmd User LspSetup call LspAddServer(lspServers)
 # No SQL language server until the postgres slice; until then gq pipes
 # through sqlfluff (dialect is a guess — revisit with postgres).
 autocmd FileType sql &l:formatprg = g:deps.sqlfluff .. ' format --dialect postgres -'
+
+# Markdown: no LSP formatter anywhere, so gq pipes through deno fmt (already
+# here for TS; it handles md, json and jsonc too).
+autocmd FileType markdown &l:formatprg = g:deps.deno .. ' fmt --ext md -'
 
 # Same map surface the CoC config used.
 nnoremap <silent> gd :LspGotoDefinition<CR>
@@ -178,8 +209,20 @@ nmap <leader>rn :LspRename<CR>
 nmap <silent> <leader>n :LspDiag next<CR>
 nmap <silent> <leader>p :LspDiag prev<CR>
 nnoremap <silent> <leader>ld :LspDiag show<CR>
-nmap <leader>f :LspFormat<CR>
-xnoremap <leader>f :LspFormat<CR>
+# ,f means the same everywhere: the language server where it formats,
+# formatprg (markdown, sql) where none does.
+def FormatBuffer()
+  if empty(&l:formatprg)
+    execute 'LspFormat'
+  else
+    var pos = getcurpos()
+    silent keepjumps normal! gggqG
+    setpos('.', pos)
+  endif
+enddef
+nnoremap <silent> <leader>f <ScriptCmd>FormatBuffer()<CR>
+xnoremap <silent> <leader>f :LspFormat<CR>
+autocmd FileType markdown,sql xnoremap <buffer> <leader>f gq
 
 g:onedark_color_overrides = {
   foreground: {gui: 'NONE', cterm: 'NONE', cterm16: 'NONE'},

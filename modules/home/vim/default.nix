@@ -21,6 +21,15 @@ in
   programs.vim = {
     enable = true;
 
+    # nixpkgs builds vim with --disable-darwin by default, which leaves
+    # +clipboard meaning *X11* — useless on macOS, so "*y and "+y silently
+    # did nothing. --enable-darwin wires the real pasteboard. Costs a local
+    # source build (no cache hit for a non-default override).
+    packageConfigurable = pkgs.vim-full.override {
+      darwinSupport = true;
+      guiSupport = false; # terminal only; the default would pull GTK
+    };
+
     # home-manager force-merges vim-sensible into this list; it covers
     # backspace, incsearch, wildmenu, autoread, ruler, laststatus=2, and
     # filetype/syntax on, so those are not repeated in config.vim.
@@ -65,6 +74,8 @@ in
             \   html: '${pkgs.vscode-langservers-extracted}/bin/vscode-html-language-server',
             \   docker: '${pkgs.dockerfile-language-server}/bin/docker-langserver',
             \   sqlfluff: '${pkgs.sqlfluff}/bin/sqlfluff',
+            \   marksman: '${pkgs.marksman}/bin/marksman',
+            \   tofu: '${pkgs.opentofu}/bin/tofu',
             \ }
       source ${./config.vim}
     '';

@@ -14,6 +14,8 @@
     htop
     jq
     just
+    kubernetes-helm
+    opentofu # terraform is BUSL/unfree; terraform-ls drives tofu fine
     ripgrep
     shellcheck # also bundled into bash-language-server's wrapper
     shfmt
