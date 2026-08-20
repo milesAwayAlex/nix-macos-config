@@ -271,8 +271,13 @@ confirmed working (no permission errors).
       **LSP roster done 2026-08-19** (11 servers, all verified attaching):
       nil+nixfmt (nix), terraform-ls (`tf`/`terraform` — vim picks either
       depending on file content), **deno** (TS/JS/TSX — brings its own
-      TypeScript plus deno fmt/lint, so the node story stays deferred;
-      requires `initializationOptions.enable`, silent without it),
+      TypeScript plus deno fmt/lint; requires `initializationOptions.enable`,
+      silent without it), **vtsls** *(added 2026-08-20)* — TypeScript is
+      split by project via the plugin's `runIfSearch`/`runUnlessSearch` on
+      `package.json`: node projects get vtsls (VS Code's own TypeScript
+      service, `autoUseWorkspaceTsdk` so diagnostics match the repo's pinned
+      tsc), everything else stays on deno, and exactly one attaches per
+      buffer,
       yaml-language-server, helm-ls (+`vim-helm` for ft=helm; drives yamlls
       itself), bash-language-server (shellcheck bundled in the nixpkgs
       wrapper, shfmt pointed at explicitly), taplo (toml), vscode-json /

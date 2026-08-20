@@ -129,6 +129,22 @@ var lspServers = [
     args: ['serve'],
     initializationOptions: {terraform: {path: g:deps.tofu}},
   },
+  # TypeScript is split by project: vtsls (VS Code's own TypeScript service)
+  # wherever a package.json is found above the file, deno everywhere else.
+  # runIfSearch and runUnlessSearch take the same marker, so exactly one of
+  # the two ever attaches to a buffer.
+  {
+    name: 'vtsls',
+    filetype: ['typescript', 'typescriptreact', 'javascript', 'javascriptreact'],
+    path: g:deps.vtsls,
+    args: ['--stdio'],
+    runIfSearch: ['package.json'],
+    rootSearch: ['tsconfig.json', 'package.json', '.git/'],
+    # Use the TypeScript pinned in the repo's node_modules rather than the
+    # one vtsls bundles, so diagnostics match what the repo's own tsc reports.
+    initializationOptions: {vtsls: {autoUseWorkspaceTsdk: true}},
+    workspaceConfig: {vtsls: {autoUseWorkspaceTsdk: true}},
+  },
   # deno lsp stays silent unless initializationOptions enables it. Brings
   # its own TypeScript, plus deno fmt/lint — no node anywhere.
   {
@@ -136,6 +152,7 @@ var lspServers = [
     filetype: ['typescript', 'typescriptreact', 'javascript', 'javascriptreact'],
     path: g:deps.deno,
     args: ['lsp'],
+    runUnlessSearch: ['package.json'],
     # Both are needed: the plugin answers deno's workspace/configuration
     # request from workspaceConfig, and an absent one reads as disabled —
     # the server then advertises hover/definition but replies null to both

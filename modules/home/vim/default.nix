@@ -64,6 +64,7 @@ in
             \   nixfmt: '${pkgs.nixfmt}/bin/nixfmt',
             \   terraform: '${pkgs.terraform-ls}/bin/terraform-ls',
             \   deno: '${pkgs.deno}/bin/deno',
+            \   vtsls: '${pkgs.vtsls}/bin/vtsls',
             \   yaml: '${pkgs.yaml-language-server}/bin/yaml-language-server',
             \   helm: '${pkgs.helm-ls}/bin/helm_ls',
             \   bash: '${pkgs.bash-language-server}/bin/bash-language-server',

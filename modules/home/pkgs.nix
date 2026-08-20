@@ -1,11 +1,10 @@
-# Packages from nixpkgs — packages only; configs migrate in Phase 4.
-# Locked-nixpkgs versions verified >= the brew set they replace (2026-08-18).
-# Note: brew's copies shadow these until uninstalled (/opt/homebrew/bin comes
-# first in the interactive PATH).
+# Staples that need no configuration of their own. Anything carrying config
+# gets its own module; this list is the remainder.
 { pkgs, ... }:
 {
   home.packages = with pkgs; [
-    deno # runtime + the TS/JS language server and formatter (see vim/)
+    cspell # spell-check staple; repo lint jobs shell out to it
+    deno # staple runtime: markdown/json formatting and stray TS outside node projects
     fzf
     gitleaks
     hack-font # terminal font; HM copies it into ~/Library/Fonts/HomeManager

@@ -6,6 +6,8 @@ Declarative macOS machine configuration: flake-based nix-darwin + home-manager (
 
 - `PLAN.md` — principles, settled stack decisions, phased roadmap, current status. The durable _why_.
 - `DECISIONS.md` — operating conventions, ADR-lite (D1–…). The durable _how_. **New conventions get an entry there** — not code comments, not PLAN.md.
+  Comments say why the code is the way it is *now*; history, dated notes and
+  rejected alternatives belong in PLAN/DECISIONS.
 
 ## Workflow
 

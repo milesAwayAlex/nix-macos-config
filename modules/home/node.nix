@@ -5,15 +5,13 @@ let
   npmPrefix = "${config.home.homeDirectory}/.npm-global";
 in
 {
-  home.packages = [
-    pkgs.nodejs_22 # LTS until 2027-04
+  home.packages = with pkgs; [
+    nodejs_22 # LTS until 2027-04
 
     # pnpm resolves its own per-repo version: the packaged 11.x is a launcher
     # that re-execs whatever `packageManager` names, and stays 11.x where
     # nothing is pinned.
-    pkgs.pnpm
-
-    pkgs.cspell
+    pnpm
   ];
 
   # npm's default global prefix is inside the read-only store. Redirect it with
