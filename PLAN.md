@@ -260,10 +260,22 @@ confirmed working (no permission errors).
       `~/.vim/pack` clones) stays intact under `/usr/bin/vim` (plain `vi`
       resolves to nix vim) until the post-confidence purge; the packpath
       exclusion is permanent armor against manual installs leaking in.
-      Remaining vim slices: full server roster
-      (typescript-language-server, vscode-langservers-extracted,
-      yaml/bash language servers, terraform-ls) with per-buffer LSP maps
-      and the prettier/eslint story; a deliberate bindings/plugin-usage
+      **LSP roster done 2026-08-19** (11 servers, all verified attaching):
+      nil+nixfmt (nix), terraform-ls (`tf`/`terraform` — vim picks either
+      depending on file content), **deno** (TS/JS/TSX — brings its own
+      TypeScript plus deno fmt/lint, so the node story stays deferred;
+      requires `initializationOptions.enable`, silent without it),
+      yaml-language-server, helm-ls (+`vim-helm` for ft=helm; drives yamlls
+      itself), bash-language-server (shellcheck bundled in the nixpkgs
+      wrapper, shfmt pointed at explicitly), taplo (toml), vscode-json /
+      css / html (`provideFormatter` on), dockerfile-language-server. SQL
+      has no server until the postgres slice — `gq` pipes through sqlfluff
+      (postgres dialect, a guess to revisit). Node-based servers ship their
+      own pinned `nodejs-slim`, so none of this touches nvm or project
+      toolchains. Deferred: gopls and rust-analyzer with their toolchains,
+      eslint (needs the node story), tailwind/prisma/emmet dropped.
+      Remaining vim slices: per-buffer LSP maps
+      (`K` currently global) and completion tuning; a deliberate bindings/plugin-usage
       review and controls overhaul (after everything else settles);
       upstream yegappan/lsp to nixpkgs once
       the dust settles (weeks out); the purge (rm the `~/.vimrc` symlink,

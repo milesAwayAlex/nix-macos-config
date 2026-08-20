@@ -27,6 +27,7 @@ in
     plugins = with pkgs.vimPlugins; [
       fzf-vim
       lsp
+      vim-helm # ft=helm detection for charts; helm-ls needs it
       nerdtree
       onedark-vim
       vim-fugitive
@@ -52,6 +53,18 @@ in
       let g:deps = #{
             \   nil: '${pkgs.nil}/bin/nil',
             \   nixfmt: '${pkgs.nixfmt}/bin/nixfmt',
+            \   terraform: '${pkgs.terraform-ls}/bin/terraform-ls',
+            \   deno: '${pkgs.deno}/bin/deno',
+            \   yaml: '${pkgs.yaml-language-server}/bin/yaml-language-server',
+            \   helm: '${pkgs.helm-ls}/bin/helm_ls',
+            \   bash: '${pkgs.bash-language-server}/bin/bash-language-server',
+            \   shfmt: '${pkgs.shfmt}/bin/shfmt',
+            \   toml: '${pkgs.taplo}/bin/taplo',
+            \   json: '${pkgs.vscode-langservers-extracted}/bin/vscode-json-language-server',
+            \   css: '${pkgs.vscode-langservers-extracted}/bin/vscode-css-language-server',
+            \   html: '${pkgs.vscode-langservers-extracted}/bin/vscode-html-language-server',
+            \   docker: '${pkgs.dockerfile-language-server}/bin/docker-langserver',
+            \   sqlfluff: '${pkgs.sqlfluff}/bin/sqlfluff',
             \ }
       source ${./config.vim}
     '';

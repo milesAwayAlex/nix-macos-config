@@ -5,6 +5,7 @@
 { pkgs, ... }:
 {
   home.packages = with pkgs; [
+    deno # runtime + the TS/JS language server and formatter (see vim/)
     fzf
     gh
     gitleaks
@@ -14,6 +15,9 @@
     jq
     just
     ripgrep
+    shellcheck # also bundled into bash-language-server's wrapper
+    shfmt
+    sqlfluff # SQL lint/format; no SQL language server until the postgres slice
     yq-go # mikefarah's yq (the `yq` attr is the unrelated python wrapper)
   ];
 }

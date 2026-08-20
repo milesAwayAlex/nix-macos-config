@@ -75,20 +75,98 @@ nnoremap <silent> <C-p> :Files<CR>
 nnoremap <silent> <leader>b :Buffers<CR>
 nnoremap <silent> <leader>/ :Rg<CR>
 
-# LSP servers — nil pilots; the full roster is a later slice.
-# nil has no native formatter: it pipes buffers through nixfmt.
-var lspServers = [{
-  name: 'nil',
-  filetype: 'nix',
-  path: g:deps.nil,
-  workspaceConfig: {
-    nil: {
-      formatting: {command: [g:deps.nixfmt]},
-    },
+# LSP servers. Registration is lazy — a server only launches when a buffer
+# of its filetype opens, so a long roster costs nothing at startup.
+# Paths come from g:deps (nix store), never from PATH.
+var lspServers = [
+  # nil has no native formatter: it pipes buffers through nixfmt.
+  {
+    name: 'nil',
+    filetype: 'nix',
+    path: g:deps.nil,
+    workspaceConfig: {nil: {formatting: {command: [g:deps.nixfmt]}}},
   },
-}]
+  # Vim detects *.tf as 'tf', not 'terraform' — register both.
+  {
+    name: 'terraform',
+    filetype: ['tf', 'terraform'],
+    path: g:deps.terraform,
+    args: ['serve'],
+  },
+  # deno lsp stays silent unless initializationOptions enables it. Brings
+  # its own TypeScript, plus deno fmt/lint — no node anywhere.
+  {
+    name: 'deno',
+    filetype: ['typescript', 'typescriptreact', 'javascript', 'javascriptreact'],
+    path: g:deps.deno,
+    args: ['lsp'],
+    initializationOptions: {enable: true, lint: true},
+  },
+  # Charts are ft=helm (vim-helm), so they never reach this one.
+  {
+    name: 'yaml',
+    filetype: 'yaml',
+    path: g:deps.yaml,
+    args: ['--stdio'],
+    workspaceConfig: {yaml: {validate: true, format: {enable: true}}},
+  },
+  # helm-ls drives yaml-language-server itself for the non-template parts.
+  {
+    name: 'helm',
+    filetype: 'helm',
+    path: g:deps.helm,
+    args: ['serve'],
+    workspaceConfig: {'helm-ls': {yamlls: {enabled: true, path: g:deps.yaml}}},
+  },
+  # shellcheck rides along in the server's wrapper; shfmt is ours to point at.
+  {
+    name: 'bash',
+    filetype: ['sh', 'bash'],
+    path: g:deps.bash,
+    args: ['start'],
+    workspaceConfig: {bashIde: {shfmt: {path: g:deps.shfmt}}},
+  },
+  {
+    name: 'toml',
+    filetype: 'toml',
+    path: g:deps.toml,
+    args: ['lsp', 'stdio'],
+  },
+  # The vscode-* trio needs provideFormatter to offer :LspFormat.
+  {
+    name: 'json',
+    filetype: ['json', 'jsonc'],
+    path: g:deps.json,
+    args: ['--stdio'],
+    initializationOptions: {provideFormatter: true},
+  },
+  {
+    name: 'css',
+    filetype: ['css', 'scss', 'less'],
+    path: g:deps.css,
+    args: ['--stdio'],
+    initializationOptions: {provideFormatter: true},
+  },
+  {
+    name: 'html',
+    filetype: 'html',
+    path: g:deps.html,
+    args: ['--stdio'],
+    initializationOptions: {provideFormatter: true},
+  },
+  {
+    name: 'docker',
+    filetype: 'dockerfile',
+    path: g:deps.docker,
+    args: ['--stdio'],
+  },
+]
 autocmd User LspSetup call LspOptionsSet({autoHighlightDiags: true})
 autocmd User LspSetup call LspAddServer(lspServers)
+
+# No SQL language server until the postgres slice; until then gq pipes
+# through sqlfluff (dialect is a guess — revisit with postgres).
+autocmd FileType sql &l:formatprg = g:deps.sqlfluff .. ' format --dialect postgres -'
 
 # Same map surface the CoC config used.
 nnoremap <silent> gd :LspGotoDefinition<CR>

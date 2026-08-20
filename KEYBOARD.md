@@ -83,5 +83,8 @@ Insert/command mode: doubling `"` `'` `` ` `` `(` `[` `{` `<` closes the
 pair and lands the cursor inside; `(<CR>` `[<CR>` `{<CR>` open an indented
 block.
 
+`gq` reformats through the filetype's formatter where the language
+server has none (SQL → sqlfluff).
+
 Recovery: `/usr/bin/vim` runs the old CoC setup untouched — the full path
 is the escape hatch, since plain `vi` also resolves to the nix vim.
