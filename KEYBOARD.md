@@ -100,10 +100,18 @@ Useful commands with no key: `:LspFixAll`, `:LspPeekReferences`,
 `:LspServer show status`, `:LspServer show capabilities`,
 `:LspServer restart`, `:LspServer debug on`.
 
-Insert/command mode: doubling `"` `'` `(` `[` `{` `<` closes the pair and
-lands the cursor inside; doubling the *closer* (`))` `]]` `}}`) gives the
-padded form `{ | }`; ` ``` ` opens a fenced code block; `(<CR>` `[<CR>`
-`{<CR>` open an indented block.
+Insert/command mode pairs:
+
+| Typed | Gives | For |
+|---|---|---|
+| `((` `[[` `{{` `""` `''` `<>` | `(\|)` | the tight pair, cursor inside |
+| `))` `]]` `}}` | `(\| )` | one trailing space, cursor against the opener |
+| `))` then space | `( \| )` | the padded form — Nix `{ x = 1; }`, bash `$(( ))` |
+| `{{` then `}}` | `{{\| }}` | a Go template; then space, or `- ` for `{{- \| }}` |
+| `(<CR>` `[<CR>` `{<CR>` | block | opening line, closing line, cursor indented between |
+| ` ``` ` | fenced block | cursor on the opening fence, ready for the language |
+
+**`^L`** jumps past the next closing quote or bracket on the line.
 
 `,f` formats through the language server where it offers formatting, and
 through `formatprg` where it does not (markdown → deno fmt, SQL →

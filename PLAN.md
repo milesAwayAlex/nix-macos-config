@@ -248,8 +248,9 @@ confirmed working (no permission errors).
       extensions (679 MB in `~/.config/coc`), and the node host dropped;
       LSP is yegappan/lsp (vim9script, in-process), with `nil` piloting on
       nix files (`,f` formats through nixfmt via nil's external-formatter
-      hook). Kept: fugitive, gitgutter, surround, onedark (transparent
-      overrides), nerdtree; added fzf.vim (`^P` files, `,b` buffers, `,/`
+      hook). Kept: fugitive, gitgutter, surround, nerdtree;
+      onedark swapped for **dracula** 2026-08-20 to match glow's style
+      (`g:dracula_colorterm = 0` keeps the terminal background showing); added fzf.vim (`^P` files, `,b` buffers, `,/`
       ripgrep). Dropped: nerdcommenter (vim 9.1 ships a native `comment`
       package if missed), polyglot (dormant since 2022; the 9.1 runtime is
       fresher), prisma/snippets/emmet fossils, `lazyredraw`, the dead

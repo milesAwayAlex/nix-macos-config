@@ -31,15 +31,21 @@ set termguicolors
 # otherwise set laststatus=2).
 set laststatus=0
 
-# vim-helm only claims a template when Chart.yaml sits exactly one level
-# above templates/. Widen it: any yaml under a templates/ dir with a
-# Chart.yaml anywhere above. (:set ft=helm still works for odd layouts.)
-autocmd FileType yaml {
-  if expand('%:p') =~ '/templates/'
-        && findfile('Chart.yaml', expand('%:p:h') .. ';') != ''
-    &l:filetype = 'helm'
-  endif
-}
+# Claim the buffer before vim's own detection does: our autocmds register
+# here, vim's filetypedetect only at packloadall below, and same-event
+# autocmds run in registration order. Retagging later (on FileType yaml)
+# does set ft=helm, but the yaml syntax load that follows in the same
+# event chain overwrites the helm one — ft right, highlighting wrong.
+# ++nested lets setfiletype fire FileType, which loads the syntax.
+augroup helmdetect
+  autocmd!
+  autocmd BufNewFile,BufRead *.yaml,*.yml,*.tpl ++nested {
+    if expand('%:p') =~ '/templates/'
+          && findfile('Chart.yaml', expand('%:p:h') .. ';') != ''
+      setfiletype helm
+    endif
+  }
+augroup END
 
 # tmux focus-events feed FocusGained, so autoread actually fires.
 autocmd FocusGained,BufEnter * silent! checktime
@@ -67,12 +73,25 @@ noremap! '' ''<left>
 noremap! (( ()<left>
 noremap! [[ []<left>
 noremap! {{ {}<left>
-# Doubled closer = the padded form: ( | ), [ | ], { | }.
-noremap! )) (  )<left><left>
-noremap! ]] [  ]<left><left>
-noremap! }} {  }<left><left>
+# Doubled closer = one trailing space, cursor against the opener: (| ),
+noremap! )) ( )<left><left>
+noremap! ]] [ ]<left><left>
+noremap! }} { }<left><left>
 noremap! <> <><left>
-inoremap ``` ```<CR>```<ESC>O
+inoremap ``` ```<CR>```<ESC>kA
+
+# Jump past the next closer on this line.
+def EscapePair(): string
+  var line = getline('.')
+  var start = col('.') - 1
+  var idx = match(line, '[]"''`)}>]', start)
+  if idx < 0
+    return ''
+  endif
+  return repeat("\<Right>", strchars(strpart(line, start, idx - start + 1)))
+enddef
+inoremap <silent><expr> <C-l> EscapePair()
+
 inoremap (<CR> (<CR>)<ESC>O
 inoremap {<CR> {<CR>}<ESC>O
 inoremap [<CR> [<CR>]<ESC>O
@@ -252,12 +271,12 @@ nnoremap <silent> <leader>f <ScriptCmd>FormatBuffer()<CR>
 xnoremap <silent> <leader>f :LspFormat<CR>
 autocmd FileType markdown,sql xnoremap <buffer> <leader>f gq
 
-g:onedark_color_overrides = {
-  foreground: {gui: 'NONE', cterm: 'NONE', cterm16: 'NONE'},
-  background: {gui: 'NONE', cterm: 'NONE', cterm16: 'NONE'},
-}
+# Dracula, the same theme glow renders with (modules/home/glow.nix).
+# colorterm=0 leaves Normal's background unset instead of painting
+# dracula's grey, so alacritty's near-black shows through.
+g:dracula_colorterm = 0
 
 # Pack plugins normally load after the vimrc; load them now so
 # :colorscheme can see pack-managed schemes.
 packloadall
-colorscheme onedark
+colorscheme dracula

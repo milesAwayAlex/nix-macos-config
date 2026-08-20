@@ -6,6 +6,7 @@
     ./alacritty.nix
     ./bash
     ./git.nix
+    ./glow.nix
     ./karabiner
     ./ssh.nix
     ./tmux.nix

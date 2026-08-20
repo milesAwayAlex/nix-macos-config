@@ -57,6 +57,7 @@
       homeModules.alacritty = ./modules/home/alacritty.nix;
       homeModules.bash = ./modules/home/bash;
       homeModules.git = ./modules/home/git.nix;
+      homeModules.glow = ./modules/home/glow.nix;
       homeModules.karabiner = ./modules/home/karabiner;
       homeModules.packages = ./modules/home/pkgs.nix;
       homeModules.ssh = ./modules/home/ssh.nix;

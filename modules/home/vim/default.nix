@@ -38,7 +38,7 @@ in
       lsp
       vim-helm # ft=helm detection for charts; helm-ls needs it
       nerdtree
-      onedark-vim
+      dracula-vim
       vim-fugitive
       vim-gitgutter
       vim-surround

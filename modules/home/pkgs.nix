@@ -9,7 +9,6 @@
     fzf
     gh
     gitleaks
-    glow
     hack-font # terminal font; HM copies it into ~/Library/Fonts/HomeManager
     htop
     jq
