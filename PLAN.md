@@ -268,17 +268,24 @@ confirmed working (no permission errors).
       yaml-language-server, helm-ls (+`vim-helm` for ft=helm; drives yamlls
       itself), bash-language-server (shellcheck bundled in the nixpkgs
       wrapper, shfmt pointed at explicitly), taplo (toml), vscode-json /
-      css / html (`provideFormatter` on), dockerfile-language-server. SQL
+      css / html (`provideFormatter` on), dockerfile-language-server,
+      markdown-oxide (Obsidian-shaped: wikilinks, backlink code lens,
+      daily notes, create-missing-note code action) and harper-ls
+      (offline grammar, also on text/gitcommit). SQL
       has no server until the postgres slice — `gq` pipes through sqlfluff
       (postgres dialect, a guess to revisit). Node-based servers ship their
       own pinned `nodejs-slim`, so none of this touches nvm or project
-      toolchains. Deferred: gopls and rust-analyzer with their toolchains,
+      toolchains. Completion: yegappan/lsp's autoComplete pops the menu as you
+      type; omniComplete is enabled too so `<C-x><C-o>` is a manual
+      trigger. Deferred: gopls and rust-analyzer with their toolchains,
       eslint (needs the node story), tailwind/prisma/emmet dropped.
       Remaining vim slices: per-buffer LSP maps
       (`K` currently global) and completion tuning; a deliberate bindings/plugin-usage
       review and controls overhaul (after everything else settles);
       upstream yegappan/lsp to nixpkgs once
-      the dust settles (weeks out); the purge (rm the `~/.vimrc` symlink,
+      the dust settles (weeks out); a notes/PKM step if the Obsidian-like
+      idea firms up (markdown-oxide is already the editor half; zk is the
+      CLI-notebook alternative, Obsidian itself is packaged); the purge (rm the `~/.vimrc` symlink,
       archive `~/.vim`, reclaim `~/.config/coc`, retire
       `~/configs/vimconf`).
 - direnv + nix-direnv **parked 2026-08-18** (was never installed — a proposed

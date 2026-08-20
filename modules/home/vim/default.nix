@@ -74,7 +74,8 @@ in
             \   html: '${pkgs.vscode-langservers-extracted}/bin/vscode-html-language-server',
             \   docker: '${pkgs.dockerfile-language-server}/bin/docker-langserver',
             \   sqlfluff: '${pkgs.sqlfluff}/bin/sqlfluff',
-            \   marksman: '${pkgs.marksman}/bin/marksman',
+            \   markdown: '${pkgs.markdown-oxide}/bin/markdown-oxide',
+            \   harper: '${pkgs.harper}/bin/harper-ls',
             \   tofu: '${pkgs.opentofu}/bin/tofu',
             \ }
       source ${./config.vim}

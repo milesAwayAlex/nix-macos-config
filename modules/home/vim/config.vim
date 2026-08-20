@@ -179,16 +179,33 @@ var lspServers = [
     path: g:deps.docker,
     args: ['--stdio'],
   },
-  # Markdown nav/completion across files. It has no formatter — gq below
-  # covers that.
+  # Obsidian-shaped markdown: wikilinks, backlink code lens, daily notes
+  # from natural-language dates, code action to create a missing note.
+  # Roots on an Obsidian vault or a repo. Formats nothing — ,f uses
+  # formatprg below.
   {
-    name: 'marksman',
+    name: 'markdown',
     filetype: 'markdown',
-    path: g:deps.marksman,
-    args: ['server'],
+    path: g:deps.markdown,
+    rootSearch: ['.obsidian/', '.moxide.toml', '.git/'],
+  },
+  # Grammar/style, local and offline. Defaults to TCP, hence --stdio.
+  {
+    name: 'harper',
+    filetype: ['markdown', 'text', 'gitcommit'],
+    path: g:deps.harper,
+    args: ['--stdio'],
   },
 ]
-autocmd User LspSetup call LspOptionsSet({autoHighlightDiags: true})
+# autoComplete (on by default) pops the menu up as you type; omniComplete
+# adds <C-x><C-o> as the manual trigger, which autoComplete otherwise
+# disables. Accept/cancel/navigate stay vim's own <C-y>/<C-e>/<C-n>/<C-p>.
+var lspOpts = {
+  autoHighlightDiags: true,
+  autoComplete: true,
+  omniComplete: true,
+}
+autocmd User LspSetup call LspOptionsSet(lspOpts)
 autocmd User LspSetup call LspAddServer(lspServers)
 
 # No SQL language server until the postgres slice; until then gq pipes

@@ -83,8 +83,13 @@ Insert/command mode: doubling `"` `'` `` ` `` `(` `[` `{` `<` closes the
 pair and lands the cursor inside; `(<CR>` `[<CR>` `{<CR>` open an indented
 block.
 
-`gq` reformats through the filetype's formatter where the language
-server has none (SQL → sqlfluff).
+`,f` formats through the language server where it offers formatting, and
+through `formatprg` where it does not (markdown → deno fmt, SQL →
+sqlfluff); `gq` always uses `formatprg`.
+
+Completion needs no key: the menu appears as you type. `<C-x><C-o>`
+triggers it manually. Accept with `<C-y>`, dismiss with `<C-e>`, move with
+`<C-n>` / `<C-p>` — vim's own insert-completion keys.
 
 Recovery: `/usr/bin/vim` runs the old CoC setup untouched — the full path
 is the escape hatch, since plain `vi` also resolves to the nix vim.
