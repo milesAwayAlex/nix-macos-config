@@ -277,7 +277,14 @@ confirmed working (no permission errors).
       `package.json`: node projects get vtsls (VS Code's own TypeScript
       service, `autoUseWorkspaceTsdk` so diagnostics match the repo's pinned
       tsc), everything else stays on deno, and exactly one attaches per
-      buffer,
+      buffer. Formatting follows the same split: with a prettier in the
+      repo's node_modules `,f` pipes through it (pinned version, repo
+      `.prettierrc`, and prettier echoes stdin back on ignored paths), and
+      without one it falls to the server — deno fmt for stray TS, itself a
+      reflowing printer. Visual `,f` stays on the server, which does ranges.
+      FormatBuffer now undoes a failed formatprg instead of leaving its
+      stderr in the buffer, since prettier errors on any mid-edit syntax
+      error,
       yaml-language-server, helm-ls (+`vim-helm` for ft=helm; drives yamlls
       itself), bash-language-server (shellcheck bundled in the nixpkgs
       wrapper, shfmt pointed at explicitly), taplo (toml), vscode-json /

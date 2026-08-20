@@ -249,6 +249,18 @@ autocmd User LspSetup call LspAddServer(lspServers)
 
 # No SQL language server until the postgres slice; until then gq pipes
 # through sqlfluff (dialect is a guess — revisit with postgres).
+# TS/JS in a node project formats through the repo's own prettier: the version
+# it pins, its .prettierrc, and safe on .prettierignore'd paths (prettier
+# echoes stdin back unchanged there). With no prettier installed, formatprg
+# stays empty and FormatBuffer falls through to the language server — for
+# stray TS that is deno fmt, a reflowing printer in its own right.
+autocmd FileType typescript,typescriptreact,javascript,javascriptreact {
+  var prettier = findfile('node_modules/.bin/prettier', expand('%:p:h') .. ';')
+  if prettier != ''
+    var arg = ' --stdin-filepath ' .. shellescape(expand('%:p'))
+    &l:formatprg = fnamemodify(prettier, ':p') .. arg
+  endif
+}
 autocmd FileType sql &l:formatprg = g:deps.sqlfluff .. ' format --dialect postgres -'
 
 # Markdown: no LSP formatter anywhere, so gq pipes through deno fmt (already
@@ -278,11 +290,22 @@ nnoremap <silent> <leader>ls :LspSymbolSearch<CR>
 def FormatBuffer()
   if empty(&l:formatprg)
     execute 'LspFormat'
-  else
-    var pos = getcurpos()
-    silent keepjumps normal! gggqG
-    setpos('.', pos)
+    return
   endif
+  var pos = getcurpos()
+  var seq = undotree().seq_cur
+  silent keepjumps normal! gggqG
+  # vim's shellredir merges stderr into stdout, so a formatprg that exits
+  # non-zero leaves its error message in the buffer instead of the file.
+  # prettier does that on any syntax error, which mid-edit is most of them.
+  if v:shell_error != 0
+    var msg = getline(1)
+    execute 'silent undo ' .. seq
+    echohl ErrorMsg
+    echomsg 'formatprg: ' .. msg
+    echohl None
+  endif
+  setpos('.', pos)
 enddef
 nnoremap <silent> <leader>f <ScriptCmd>FormatBuffer()<CR>
 xnoremap <silent> <leader>f :LspFormat<CR>

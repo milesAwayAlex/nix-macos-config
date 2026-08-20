@@ -114,8 +114,11 @@ Insert/command mode pairs:
 **`^L`** jumps past the next closing quote or bracket on the line.
 
 `,f` formats through the language server where it offers formatting, and
-through `formatprg` where it does not (markdown → deno fmt, SQL →
-sqlfluff); `gq` always uses `formatprg`.
+through `formatprg` where it does not (markdown → deno fmt, SQL → sqlfluff,
+TS/JS in a node project → that repo's own prettier); `gq` always uses
+`formatprg`. Visual-mode `,f` stays on the language server, which formats a
+range — prettier reprints whole files and cannot. A `formatprg` that fails
+leaves the buffer untouched and reports its first error line.
 
 Completion needs no key: the menu appears as you type. `<C-x><C-o>`
 triggers it manually. Accept with `<C-y>`, dismiss with `<C-e>`, move with
