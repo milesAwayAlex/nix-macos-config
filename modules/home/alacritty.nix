@@ -1,8 +1,5 @@
-# Alacritty, ported 2026-08-18 from the pre-0.13 ~/.alacritty.yml after a
-# line-by-line review against the 0.17 man pages (alacritty.5,
-# alacritty-bindings.5). Philosophy: fullscreen dumb terminal — tmux owns
-# scrollback, search, and copy-mode, so the bindings only unbind the mode
-# entry points;
+# Alacritty, fullscreen dumb terminal. tmux owns scrollback, search,
+# and copy-mode, so the bindings only unbind the mode entry points
 { lib, pkgs, ... }:
 {
   programs.alacritty = {

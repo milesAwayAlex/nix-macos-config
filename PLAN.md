@@ -357,7 +357,14 @@ confirmed working (no permission errors).
 - [x] Staples from nixpkgs *(2026-08-20)*: **node** `nodejs_22` (LTS, pinned
       to the major) + `cspell`, in `modules/home/node.nix` — nvm retired per
       D12, since every `.nvmrc` under `~/code` says v22 and the real per-repo
-      variance is pnpm, which corepack resolves from `packageManager`. Global
+      variance is pnpm, handled by packaging `pnpm` itself — the 11.x binary
+      is a launcher that re-execs the version in each repo's `packageManager`
+      and stays 11.x elsewhere. Corepack was tried first and rejected: it
+      ships inside node but installs nothing, and `corepack enable` can only
+      write shims next to the node binary (read-only store) or into a
+      writable dir as store-pinned symlinks that dangle at the next GC.
+      Verified dispatching 9.15.9 / 7.33.7 / 10.10.0 across three repos and
+      11.21.0 outside one. Global
       prefix redirected via `NPM_CONFIG_PREFIX` (never `~/.npmrc` — npm writes
       auth tokens there). **k8s bundle** in `modules/home/k8s.nix`: `kubectl`,
       `kubectx`, `kubernetes-helm`, `k9s`, `argocd`, `argo-rollouts`, `kind`,

@@ -1,8 +1,6 @@
-# Git, ported 2026-08-18 from ~/.gitconfig after a line-by-line review
-# against the 2.54 man pages. ~/.gitconfig itself stays unmanaged and is
+# Git config. Note that ~/.gitconfig itself stays unmanaged and is
 # surrendered to machine-local/IT-pushed entries (D9) — git reads it after
-# this file, so its keys deliberately win. Remotes are SSH-only; the old
-# credential helpers (shelling out to brew's gh) were dropped.
+# this file, so its keys deliberately win.
 { ... }:
 {
   programs.git = {
@@ -39,11 +37,6 @@
       checkout.workers = 0; # default 1 (sequential); 0 = all logical cores
       fetch.writeCommitGraph = true; # default false; incremental graph per fetch
       pack.threads = 0; # explicit auto (docs don't state the unset default)
-
-      # Dropped from the old config: protocol.version=2, core.commitGraph,
-      # index.threads (all 2.54 defaults); gc.auto=10 + gc.autoPackLimit=10
-      # (triggered gc every ~10 loose objects — default cadence restored);
-      # the brew-gh credential helpers (binary gone; SSH-only now).
     };
   };
 }
