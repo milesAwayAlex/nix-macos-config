@@ -200,3 +200,72 @@ wrapper.
 PLAN, after the dust settles), `old` is adopted into this flake (Phase 6 —
 both futures are intended), or the pattern multiplies — several
 arg-taking modules would argue for an overlay instead.
+
+## D12 — Runtimes and cloud CLIs are declared, not version-managed *(2026-08-20)*
+
+**Decision.** Language runtimes and vendor CLIs come from nixpkgs at a
+pinned attribute (`nodejs_22`, `kubectl`, `google-cloud-sdk`), and the
+imperative version manager in front of them is retired — nvm first, with
+`tfswitch`/`pyenv`/`jenv` to follow as those toolchains land. Where a tool
+has its own plugin mechanism that writes into its install directory
+(`gcloud components install`), the components move into the derivation
+(`withExtraComponents`). Per-project divergence is the exception and is
+handled at the project boundary: `nix shell nixpkgs#nodejs_20` for a
+one-off, dev shells + direnv if it becomes routine.
+
+**Why.** The managers were not being used as managers. Every `.nvmrc` under
+`~/code` said `v22` while nvm carried three unused majors; gcloud sat at
+463.0.0 from 2024-02, and the `kubectl` it dispatched was 1.27 against 1.35
+control planes — an eight-minor skew that kubectl itself warned about on
+every call. An imperative updater only helps if someone runs it, and nobody
+does; the weekly lock bump is the update ritual that actually happens. The
+genuine per-repo variance turned out to be pnpm (7.33 / 9.15 / 10.10 via
+`packageManager`), which corepack resolves from the repo itself and needs no
+manager at all.
+
+**Revisit when.** A repo pins a node major the pinned one cannot satisfy
+(then: dev shell, not nvm), or a vendor CLI ships a component that nixpkgs
+does not carry.
+
+## D13 — Config a tool rewrites at runtime stays the tool's *(2026-08-20)*
+
+**Decision.** HM manages config files their program only reads. Files the
+program itself rewrites during normal use are left alone unless the file is
+stable in practice and worth the converge-copy machinery (D2). First
+refusal: `~/.claude/settings.json` — the harness writes model, theme and
+plugin state into it. Same reasoning keeps `~/.npmrc` unmanaged (npm writes
+registry auth tokens there; the global prefix is set by env var instead) and
+`~/.config/gh/hosts.yml` unmanaged while `config.yml` is declared.
+
+**Why.** Three ownership models are now in play — read-only store symlink,
+converge-copy (D2), and machine-local (D9/D10) — and the deciding question
+is not how important the file is, it is who writes it. A symlink to the
+store makes the program's own writes fail; converge-copy makes them silently
+vanish at the next switch. Karabiner earns converge-copy because the config
+has not changed in years and the GUI is the only writer; a harness that
+rewrites settings whenever a model or theme is picked would be fighting the
+tool for no gain.
+
+**Revisit when.** The file stops churning (then converge-copy), or the tool
+grows a split between declared and runtime state.
+
+## D14 — Packages nixpkgs lacks are written as upstreamable derivations *(2026-08-20)*
+
+**Decision.** A package nixpkgs does not carry (first: `kube-fzf`) gets a
+normal nixpkgs-shaped expression under `packages/`, pinned with
+`fetchFromGitHub` + hash, exposed as `packages.${system}.<name>` and pulled
+into modules with `callPackage`. Deliberately *not* the D11 pattern: flake
+inputs are for sources whose updates we want to ride, `packages/` is for
+things whose destination is a nixpkgs PR — the file should already be
+`pkgs/by-name/ku/kube-fzf/package.nix` with nothing but the path changed.
+
+**Why.** The two cases pull in opposite directions. yegappan/lsp is alive and
+defines the editing experience, so `just update vim9-lsp` is the point;
+kube-fzf's last commit is 2023-09 and there is nothing to track, so a flake
+input would add lock churn plus a rev that has to be translated back into a
+`fetchFromGitHub` block at upstreaming time. Writing the derivation in its
+final shape means the PR is a file move and the local copy is the test.
+
+**Revisit when.** The package lands in nixpkgs (then delete the file and the
+`callPackage`), or a `packages/` entry starts needing head-tracking — that is
+a D11 case wearing the wrong hat.

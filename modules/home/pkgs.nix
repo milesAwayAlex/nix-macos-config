@@ -7,13 +7,11 @@
   home.packages = with pkgs; [
     deno # runtime + the TS/JS language server and formatter (see vim/)
     fzf
-    gh
     gitleaks
     hack-font # terminal font; HM copies it into ~/Library/Fonts/HomeManager
     htop
     jq
     just
-    kubernetes-helm
     opentofu # terraform is BUSL/unfree; terraform-ls drives tofu fine
     ripgrep
     shellcheck # also bundled into bash-language-server's wrapper

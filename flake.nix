@@ -56,14 +56,21 @@
       # pre-Phase-6) can consume them as an input.
       homeModules.alacritty = ./modules/home/alacritty.nix;
       homeModules.bash = ./modules/home/bash;
+      homeModules.gcloud = ./modules/home/gcloud.nix;
+      homeModules.gh = ./modules/home/gh.nix;
       homeModules.git = ./modules/home/git.nix;
       homeModules.glow = ./modules/home/glow.nix;
+      homeModules.k8s = ./modules/home/k8s.nix;
       homeModules.karabiner = ./modules/home/karabiner;
+      homeModules.node = ./modules/home/node.nix;
       homeModules.packages = ./modules/home/pkgs.nix;
       homeModules.ssh = ./modules/home/ssh.nix;
       homeModules.tmux = ./modules/home/tmux.nix;
       homeModules.vim = ./modules/home/vim;
       darwinModules.input = ./modules/darwin/input;
+
+      # Packages this repo maintains itself because nixpkgs has none (D14).
+      packages.${system}.kube-fzf = pkgs.callPackage ./packages/kube-fzf.nix { };
 
       devShells.${system}.default = pkgs.mkShell {
         packages = [

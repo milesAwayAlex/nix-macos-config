@@ -37,7 +37,7 @@ principles here say *why*, that file says *how*.
 | Spotlight/Dock fix | Built-in successors to mac-app-util, verified 2026-08-18 against 26.05 sources: HM `targets.darwin.copyApps` (default on `home.stateVersion` ≥ 25.11) copies `home.packages` apps to `~/Applications/Home Manager Apps`; nix-darwin copies `environment.systemPackages` apps to `/Applications/Nix Apps` | Real copies → Spotlight indexing, stable Dock pins, sane TCC. Caveat: updating an existing copied bundle may raise a one-time App Management permission prompt for the terminal running the switch. |
 | Secrets | 1Password-first runtime references (`op`, SSH agent); **nothing in repo/store**; sops-nix deferred until first server/VM | gitleaks pre-commit as seatbelt. Bitwarden = second domain; vaultwarden self-host option later. |
 | Browsers | **Both first-class.** Chrome: cask + declared policy baseline (G Suite daily driver). Firefox: cask app + full `programs.firefox` config (profile, user.js, NUR extensions). | Both self-update (appliance tier). Never install browsers from nixpkgs on macOS. |
-| AI harnesses | Native self-updating installers, bootstrapped by activation script; configs (`~/.claude/settings.json` etc.) HM-linked per-file | Binary = appliance; config = code. |
+| AI harnesses | Native self-updating installers, run once by hand from `BOOTSTRAP.md`; config **deliberately unmanaged** (D13) | Binary = appliance. nixpkgs' `claude-code` is unfree, uncached and lags the running version; the harness rewrites its own settings, so declaring them would fight the tool. |
 | GC | `nix.gc.automatic`, `--delete-older-than 14d`, `nix.optimise.automatic` | Never bare `-d`. Module-mode HM = single profile chain. |
 | Shell | **bash** (modern bash 5 from nixpkgs as login shell; macOS ships 3.2) | `programs.bash` in HM; `/etc/shells` via `environment.shells`; one manual `chsh`. |
 | Editor | **vim** (`programs.vim`, plugins from `pkgs.vimPlugins`; LSP via yegappan/lsp, a flake input per D11) | Ported clean 2026-08-19 — the sourced-vimrc escape hatch proved unnecessary after the line-by-line review. |
@@ -196,12 +196,19 @@ next natural reboot, no dedicated test needed.
 - [ ] Firefox: full `programs.firefox` config — profile, `user.js` settings,
       search engines, NUR extensions (1Password to start) — with the app from the
       cask (module's package option = null pattern).
-- [ ] Password managers: nixpkgs CLIs (`_1password-cli`, `rbw` and/or
-      `bitwarden-cli`). 1Password SSH agent in `programs.ssh`
+- [ ] Password managers: 1Password SSH agent in `programs.ssh`
       (`IdentityAgent` → 1Password socket); git signing via SSH key.
       Bitwarden = second domain; SSH `Match` blocks if/when it holds keys.
-- [ ] Harness bootstrap: activation/run-once script installing Claude Code native
-      installer; HM-link individual config files (`~/.claude/settings.json`, etc.).
+      *(`op` source deferred 2026-08-20: it is nixpkgs' first unfree package,
+      needing an `allowUnfreePredicate` allowlist, and the app it integrates
+      with — `/Applications/1Password.app`, installed manually, adopted as a
+      cask here — is the thing that would gate a later biometric-unlock
+      option. Decide CLI source alongside the app, not before.)*
+- [ ] Harness bootstrap — **decided 2026-08-20: manual, not activation.** The
+      native installer is a one-time step on a machine that needs an
+      interactive login anyway, so it lives in `BOOTSTRAP.md` rather than
+      putting a curl-pipe on the `switch` path. `~/.claude/settings.json`
+      stays unmanaged per D13.
 
 **Gate:** `chrome://policy` shows baseline; deleting the Firefox profile and
 rebuilding restores it from repo; `ssh` prompts via 1Password; cask self-updates
@@ -347,8 +354,23 @@ confirmed working (no permission errors).
       `~/Library/Fonts/HomeManager`). After confidence, deletable: the old
       app, `~/.alacritty.yml` + `~/configs/alacritty/`, and the four manual
       Hack TTFs in `~/Library/Fonts`.
-- [ ] Staples from nixpkgs: `nodejs`, `deno`, `bun`, `go`, `kubectl`
-      (+ per-project versions via dev shells/direnv when needed).
+- [x] Staples from nixpkgs *(2026-08-20)*: **node** `nodejs_22` (LTS, pinned
+      to the major) + `cspell`, in `modules/home/node.nix` — nvm retired per
+      D12, since every `.nvmrc` under `~/code` says v22 and the real per-repo
+      variance is pnpm, which corepack resolves from `packageManager`. Global
+      prefix redirected via `NPM_CONFIG_PREFIX` (never `~/.npmrc` — npm writes
+      auth tokens there). **k8s bundle** in `modules/home/k8s.nix`: `kubectl`,
+      `kubectx`, `kubernetes-helm`, `k9s`, `argocd`, `argo-rollouts`, `kind`,
+      and `kube-fzf` — kubectl 1.36 vs GKE 1.35 is inside the ±1 skew,
+      replacing gcloud's dispatcher which resolved to 1.27 and warned on every
+      call. `skaffold` dropped as unused. `kube-fzf` is not in nixpkgs, so it
+      is packaged in `packages/kube-fzf.nix` per D14, shaped for a nixpkgs PR
+      once it has run for a while. **gcloud** in
+      `modules/home/gcloud.nix` with `withExtraComponents
+      [gke-gcloud-auth-plugin]`. `gh` grew a config module
+      (`git_protocol = ssh`). `bun` and `go` deliberately skipped — no
+      toolchain need yet. Per-project versions via dev shells/direnv when
+      needed.
       *(Pulled forward 2026-08-18: `fzf`, `git`, `glow`, `ripgrep`, `tmux`,
       `jq`, `yq-go`, `htop`, `gh` as packages-only in `modules/home/pkgs.nix` —
       locked-nixpkgs versions beat the stale brew set on all nine; the brew
@@ -366,7 +388,8 @@ confirmed working (no permission errors).
 
 - [ ] Reconcile Phase 0 inventory: every app/package either declared or consciously
       dropped. Then flip `homebrew.onActivation.cleanup = "zap"`.
-- [ ] `BOOTSTRAP.md`: the irreducible per-machine manual checklist —
+- [ ] `BOOTSTRAP.md` *(seeded 2026-08-20 with the harness entry)*: the
+      irreducible per-machine manual checklist —
       WG-installer run · TCC grants (Karabiner) · input source + logout ·
       `chsh` · 1Password sign-in · browser sign-ins · harness login ·
       `git config core.hooksPath .githooks` until Phase 4 makes it declarative.
