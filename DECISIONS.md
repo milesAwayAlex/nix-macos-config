@@ -269,3 +269,32 @@ final shape means the PR is a file move and the local copy is the test.
 **Revisit when.** The package lands in nixpkgs (then delete the file and the
 `callPackage`), or a `packages/` entry starts needing head-tracking — that is
 a D11 case wearing the wrong hat.
+
+## D15 — GNU userland, unprefixed *(2026-08-20)*
+
+**Decision.** `coreutils`, `findutils`, `gnused`, `gnugrep`, `gawk`,
+`gnutar`, `diffutils` and `gnumake` go into `home.packages` under their
+plain names, so `ls`, `sed`, `find`, `awk`, `grep`, `tar`, `make` resolve to
+GNU in any interactive shell and anything it spawns. No `g`-prefix, no
+`gnubin`-style opt-in directory. `uutils-coreutils` rejected — a Rust
+reimplementation buys nothing here and adds compatibility unknowns.
+
+**Why.** The work is GKE, helm and CI — Linux and GNU end to end — and the
+BSD/GNU differences are binary rather than gradual: `sed -i` versus
+`sed -i ''`, `date -d` versus `date -v`, `stat -c` versus `stat -f`, plus
+`find -printf`, `xargs -r`, `grep -P` and `sort -h` simply absent. The
+failure modes are asymmetric, which decides it: GNU tools fed a BSD idiom
+error loudly, while BSD tools fed a GNU idiom copied from Linux docs produce
+wrong output silently. Staying on BSD meant keeping the quieter failure.
+Two tools macOS has no equivalent for — `timeout` and `realpath` — come
+along free, and `make` jumps from 3.81 (2006) to 4.4.
+
+**Scope and cost.** Only the user profile changes; the system stays BSD, so
+launchd jobs and absolute `/usr/bin/…` calls are unaffected — a script that
+works in the shell can still differ under launchd. One real breakage,
+handled in the same change: `ls -G` is colour on BSD and `--no-group` on
+GNU, so `modules/home/bash` now aliases `ls --color=auto`. `findutils` also
+shadows macOS `locate`, whose database GNU `updatedb` does not maintain.
+
+**Revisit when.** Something outside the shell turns out to depend on BSD
+behaviour — reverting is deleting one module.

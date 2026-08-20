@@ -60,6 +60,7 @@
       homeModules.gh = ./modules/home/gh.nix;
       homeModules.git = ./modules/home/git.nix;
       homeModules.glow = ./modules/home/glow.nix;
+      homeModules.gnu = ./modules/home/gnu.nix;
       homeModules.k8s = ./modules/home/k8s.nix;
       homeModules.karabiner = ./modules/home/karabiner;
       homeModules.node = ./modules/home/node.nix;

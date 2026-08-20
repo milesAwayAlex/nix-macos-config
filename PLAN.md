@@ -94,7 +94,7 @@ The justfile resolves the alias (env var `NIXHOST` or `hostname -s` mapping).
 
 **Gate:** MDM verdict positive; inventory committed.
 
-## Phase 1 — Seed + skeleton ☐
+## Phase 1 — Seed + skeleton — **complete 2026-08-18** ☑
 
 - [x] Install via [NixOS/nix-installer](https://github.com/NixOS/nix-installer)
       **2.35.1** → Nix 2.35.1, *2026-08-15*. Receipt: `/nix/receipt.json`;
@@ -214,7 +214,7 @@ next natural reboot, no dedicated test needed.
 rebuilding restores it from repo; `ssh` prompts via 1Password; cask self-updates
 confirmed working (no permission errors).
 
-## Phase 4 — Shell + CLI environment ☐
+## Phase 4 — Shell + CLI environment — **complete 2026-08-20** ☑
 
 - [x] **bash + ssh** *(config slice done 2026-08-18)*: `~/configs/bashconf`
       reviewed line-by-line → `programs.bash` + `programs.readline` in
@@ -377,17 +377,36 @@ confirmed working (no permission errors).
       formulae were uninstalled, so the nix copies are live. Configs still land
       here in Phase 4. GNU coreutils deliberately deferred to the shell work —
       unprefixed BSD→GNU userland flip is a decision, not a package add.)*
-- [ ] Existing dotfiles migrated per preference order (HM module first; plain-file
-      escape hatch where translation isn't worth it). Iterate-heavy configs may use
-      `mkOutOfStoreSymlink` for edit-without-rebuild.
+- [x] **GNU userland** *(2026-08-20)*: `coreutils`, `findutils`, `gnused`,
+      `gnugrep`, `gawk`, `gnutar`, `diffutils`, `gnumake` unprefixed in
+      `modules/home/gnu.nix` — the BSD→GNU flip this phase had deferred as a
+      decision rather than a package add, taken per **D15** for CI parity.
+      `ls -G` alias corrected to `--color=auto` in the same change.
+- [x] Existing dotfiles migrated per preference order (HM module first;
+      plain-file escape hatch where translation isn't worth it) — **complete
+      2026-08-20**. Every live config is declared: bash/readline, ssh, git,
+      tmux, alacritty, vim, karabiner, glow, gh. `mkOutOfStoreSymlink` was
+      never needed. What remains in `~/configs` is dead files awaiting
+      deletion, not unmigrated config — that is Phase 5 reconciliation, along
+      with the CoC/nvm/brew-gcloud reclaim. The `~/.config/karabiner ->
+      ~/configs/karabiner` symlink (which had activation writing into a public
+      git tree) was replaced with a real directory 2026-08-20; only
+      `~/.vimrc` → `vimconf/.vimrc` stays live, deliberately, for the
+      `/usr/bin/vim` recovery path.
 
-**Gate:** fresh terminal = fully configured bash/vim/tmux; Alacritty from Spotlight;
-`bash --version` ≥ 5.
+**Gate:** fresh terminal = fully configured bash/vim/tmux ☑; Alacritty from
+Spotlight ☑; `bash --version` ≥ 5 ☑. **Phase 4 complete 2026-08-20.**
 
 ## Phase 5 — Converge and enforce ☐
 
 - [ ] Reconcile Phase 0 inventory: every app/package either declared or consciously
-      dropped. Then flip `homebrew.onActivation.cleanup = "zap"`.
+      dropped. Then flip `homebrew.onActivation.cleanup = "zap"`. Carried in
+      from Phase 4 as one deletion pass: `~/configs` (all but `vimconf`, which
+      backs the recovery vim), `~/.vim` + `~/.config/coc` (679 MB), `~/.nvm`
+      (2.1 GB), brew's google-cloud-sdk (2.3 GB), the manual Alacritty 0.12.2
+      and hand-installed Hack TTFs, and the dangling `~/git_completion` and
+      `~/.alacritty.yml` symlinks. 🔴 Also the Spacelift key + `ghp_` PAT in
+      `~/configs/bashconf/.bashrc` — rotate before that repo is touched again.
 - [ ] `BOOTSTRAP.md` *(seeded 2026-08-20 with the harness entry)*: the
       irreducible per-machine manual checklist —
       WG-installer run · TCC grants (Karabiner) · input source + logout ·

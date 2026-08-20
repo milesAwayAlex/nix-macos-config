@@ -9,6 +9,7 @@
     ./gh.nix
     ./git.nix
     ./glow.nix
+    ./gnu.nix
     ./k8s.nix
     ./karabiner
     ./node.nix

@@ -38,11 +38,11 @@
     ];
 
     shellAliases = {
-      ls = "ls -G";
+      ls = "ls --color=auto";
       l = "ls -CF";
       ll = "ls -ahlF";
       la = "ls -A";
-      grep = "grep --color";
+      grep = "grep --color=auto";
       f = "fg";
       one = "git log --oneline --all --graph";
     };
