@@ -60,16 +60,19 @@ map <silent> <leader><cr> :noh<cr>
 nmap gb :bnext<cr>
 nmap gB :bprevious<cr>
 nmap <leader>sp :setlocal spell!<cr>
-nmap <leader>o :tabe<cr>
 
 # Autoclose pairs.
 noremap! "" ""<left>
 noremap! '' ''<left>
-noremap! `` ``<left>
 noremap! (( ()<left>
 noremap! [[ []<left>
 noremap! {{ {}<left>
+# Doubled closer = the padded form: ( | ), [ | ], { | }.
+noremap! )) (  )<left><left>
+noremap! ]] [  ]<left><left>
+noremap! }} {  }<left><left>
 noremap! <> <><left>
+inoremap ``` ```<CR>```<ESC>O
 inoremap (<CR> (<CR>)<ESC>O
 inoremap {<CR> {<CR>}<ESC>O
 inoremap [<CR> [<CR>]<ESC>O
@@ -226,6 +229,14 @@ nmap <leader>rn :LspRename<CR>
 nmap <silent> <leader>n :LspDiag next<CR>
 nmap <silent> <leader>p :LspDiag prev<CR>
 nnoremap <silent> <leader>ld :LspDiag show<CR>
+# Code actions and friends, on the keys the CoC config used.
+nnoremap <silent> <leader>a :LspCodeAction<CR>
+xnoremap <silent> <leader>a :LspCodeAction<CR>
+nnoremap <silent> <leader>qf :LspAutoFix<CR>
+nnoremap <silent> <leader>i :LspOrganizeImports<CR>
+nnoremap <silent> <leader>cl :LspCodeLens<CR>
+nnoremap <silent> <leader>lo :LspDocumentSymbol<CR>
+nnoremap <silent> <leader>ls :LspSymbolSearch<CR>
 # ,f means the same everywhere: the language server where it formats,
 # formatprg (markdown, sql) where none does.
 def FormatBuffer()

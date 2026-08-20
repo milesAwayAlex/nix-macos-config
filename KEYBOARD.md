@@ -65,23 +65,45 @@ Every custom key from `modules/home/vim/config.vim`; leader is `,`.
 | `,w` | save |
 | `,<CR>` | clear search highlight |
 | `gb` / `gB` | next / previous buffer |
-| `,o` | new tab |
 | `,sp` | toggle spell check |
 | `*` / `#` (visual) | search down / up for the selection |
 | `^T` | NERDTree toggle |
 | `^P` | fzf file picker (`:Files`) |
 | `,b` | fzf buffer picker (`:Buffers`) |
 | `,/` | ripgrep the project (`:Rg`) |
-| `gd` / `gy` / `gi` / `gr` | goto definition / type definition / implementation / references |
-| `K` | hover documentation |
-| `,rn` | rename symbol |
-| `,n` / `,p` | next / previous diagnostic |
-| `,ld` | diagnostics list (`:LspDiag show`) |
-| `,f` | format buffer (normal) or selection (visual); nix goes through nixfmt |
 
-Insert/command mode: doubling `"` `'` `` ` `` `(` `[` `{` `<` closes the
-pair and lands the cursor inside; `(<CR>` `[<CR>` `{<CR>` open an indented
-block.
+### LSP
+
+Served by yegappan/lsp. Anything a given language server does not implement
+reports itself as unsupported rather than failing silently.
+
+| Key | Command | Result |
+|---|---|---|
+| `gd` / `gy` / `gi` | `:LspGotoDefinition` / `GotoTypeDef` / `GotoImpl` | jump to definition / type definition / implementation |
+| `gr` | `:LspShowReferences` | references (backlinks, in markdown) |
+| `K` | `:LspHover` | hover popup |
+| `,rn` | `:LspRename` | rename symbol across the workspace |
+| `,f` | — | format (server, else `formatprg`) |
+| `,a` | `:LspCodeAction` | code actions at the cursor, or over a visual range |
+| `,qf` | `:LspAutoFix` | apply the first fix for the problem on this line |
+| `,i` | `:LspOrganizeImports` | organize imports |
+| `,cl` | `:LspCodeLens` | run the code lens on this line |
+| `,lo` | `:LspDocumentSymbol` | outline of this file |
+| `,ls` | `:LspSymbolSearch` | search symbols across the workspace |
+| `,n` / `,p` | `:LspDiag next` / `prev` | next / previous diagnostic |
+| `,ld` | `:LspDiag show` | all diagnostics for the buffer |
+
+Useful commands with no key: `:LspFixAll`, `:LspPeekReferences`,
+`:LspIncomingCalls` / `:LspOutgoingCalls`, `:LspShowSignature`,
+`:LspSelectionExpand` / `:LspSelectionShrink`, `:LspHighlight` (and
+`:LspHighlightClear`), `:LspFold`. For debugging a server:
+`:LspServer show status`, `:LspServer show capabilities`,
+`:LspServer restart`, `:LspServer debug on`.
+
+Insert/command mode: doubling `"` `'` `(` `[` `{` `<` closes the pair and
+lands the cursor inside; doubling the *closer* (`))` `]]` `}}`) gives the
+padded form `{ | }`; ` ``` ` opens a fenced code block; `(<CR>` `[<CR>`
+`{<CR>` open an indented block.
 
 `,f` formats through the language server where it offers formatting, and
 through `formatprg` where it does not (markdown → deno fmt, SQL →
