@@ -254,7 +254,7 @@ confirmed working (no permission errors).
       package if missed), polyglot (dormant since 2022; the 9.1 runtime is
       fresher), prisma/snippets/emmet fossils, `lazyredraw`, the dead
       `Ack`/`Bclose` helpers, the hand-rolled statusline (vim-sensible's
-      `laststatus=2` stands — revisit if it annoys). **Recovery world:**
+      `laststatus=2` overridden back to 0). **Recovery world:**
       the HM vim runs `-u <store vimrc>` and removes `~/.vim` from
       packpath/runtimepath, so the old setup (`~/.vimrc` symlink +
       `~/.vim/pack` clones) stays intact under `/usr/bin/vim` (plain `vi`

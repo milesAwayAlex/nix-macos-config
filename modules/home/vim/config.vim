@@ -27,6 +27,10 @@ set updatetime=300
 set signcolumn=number
 set termguicolors
 
+# No status line: the ruler rides the command line (vim-sensible would
+# otherwise set laststatus=2).
+set laststatus=0
+
 # tmux focus-events feed FocusGained, so autoread actually fires.
 autocmd FocusGained,BufEnter * silent! checktime
 
