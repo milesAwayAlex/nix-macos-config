@@ -65,7 +65,7 @@ nmap <leader>w :w<cr>
 map <silent> <leader><cr> :noh<cr>
 nmap gb :bnext<cr>
 nmap gB :bprevious<cr>
-nmap <leader>sp :setlocal spell!<cr>
+nnoremap <leader>sp <ScriptCmd>g:HarperEnable()<CR>:setlocal spell!<CR>
 
 # Autoclose pairs.
 noremap! "" ""<left>
@@ -229,12 +229,6 @@ var lspServers = [
     rootSearch: ['.obsidian/', '.moxide.toml', '.git/'],
   },
   # Grammar/style, local and offline. Defaults to TCP, hence --stdio.
-  {
-    name: 'harper',
-    filetype: ['markdown', 'text', 'gitcommit'],
-    path: g:deps.harper,
-    args: ['--stdio'],
-  },
 ]
 # autoComplete (on by default) pops the menu up as you type; omniComplete
 # adds <C-x><C-o> as the manual trigger, which autoComplete otherwise
@@ -246,6 +240,29 @@ var lspOpts = {
 }
 autocmd User LspSetup call LspOptionsSet(lspOpts)
 autocmd User LspSetup call LspAddServer(lspServers)
+
+# harper-ls is registered on demand rather than at startup: its prose lints
+# are noisy enough in markdown to want silence by default. LspAddServer sends
+# buffers that are already open to the new server, so enabling is immediate.
+# The plugin has no per-server stop, so this only turns harper on — the
+# off state is a vim that has not been asked for it.
+var harperServer = {
+  name: 'harper',
+  filetype: ['markdown', 'text', 'gitcommit'],
+  path: g:deps.harper,
+  args: ['--stdio'],
+}
+var harperOn = false
+def g:HarperEnable()
+  if harperOn
+    echo 'harper: already on'
+    return
+  endif
+  g:LspAddServer([harperServer])
+  harperOn = true
+  echo 'harper: on'
+enddef
+command! Harper call g:HarperEnable()
 
 # No SQL language server until the postgres slice; until then gq pipes
 # through sqlfluff (dialect is a guess — revisit with postgres).
@@ -287,29 +304,52 @@ nnoremap <silent> <leader>lo :LspDocumentSymbol<CR>
 nnoremap <silent> <leader>ls :LspSymbolSearch<CR>
 # ,f means the same everywhere: the language server where it formats,
 # formatprg (markdown, sql) where none does.
+# Runs formatprg in-process rather than through gq. gq filters by appending
+# the program's output below the original lines and deleting them afterwards,
+# and vim serves its event loop while the program runs — so the language
+# server can receive a didChange for the doubled buffer and keep it, which
+# tsserver reports as duplicate identifiers on every symbol. Replacing the
+# lines here mutates the buffer with no yield in between. It also means a
+# failing formatprg (prettier on any mid-edit syntax error) leaves the buffer
+# untouched, and an already-formatted buffer is not marked modified.
 def FormatBuffer()
   if empty(&l:formatprg)
     execute 'LspFormat'
     return
   endif
   var pos = getcurpos()
-  var seq = undotree().seq_cur
-  silent keepjumps normal! gggqG
-  # vim's shellredir merges stderr into stdout, so a formatprg that exits
-  # non-zero leaves its error message in the buffer instead of the file.
-  # prettier does that on any syntax error, which mid-edit is most of them.
+  var src = getline(1, '$')
+  var out = systemlist(&l:formatprg, src)
   if v:shell_error != 0
-    var msg = getline(1)
-    execute 'silent undo ' .. seq
     echohl ErrorMsg
-    echomsg 'formatprg: ' .. msg
+    echomsg 'formatprg: ' .. get(out, 0, 'failed')
     echohl None
+    return
   endif
-  setpos('.', pos)
+  if out == src
+    return
+  endif
+  setline(1, out)
+  if len(src) > len(out)
+    deletebufline('%', len(out) + 1, len(src))
+  endif
+  # Deliver the change now: the plugin pushes didChange and queues its
+  # diagnostics pull from a change listener, and without a flush the pull can
+  # race the replacement and leave diagnostics describing a half-updated file.
+  listener_flush()
+  cursor(min([pos[1], line('$')]), pos[2])
 enddef
 nnoremap <silent> <leader>f <ScriptCmd>FormatBuffer()<CR>
 xnoremap <silent> <leader>f :LspFormat<CR>
 autocmd FileType markdown,sql xnoremap <buffer> <leader>f gq
+
+# LspAutoFix only applies a fix when the diagnostic has exactly one candidate
+# (or one marked preferred); harper offers a list of spellings, so it declines
+# silently. In prose ,qf offers that list instead, filtered to quickfix
+# actions so the menu holds candidate spellings and not markdown-oxide's
+# source actions.
+autocmd FileType markdown,text,gitcommit
+      \ nnoremap <buffer> <leader>qf <Cmd>LspCodeAction only:quickfix<CR>
 
 # Dracula, the same theme glow renders with (modules/home/glow.nix).
 # colorterm=0 leaves Normal's background unset instead of painting

@@ -291,7 +291,10 @@ confirmed working (no permission errors).
       css / html (`provideFormatter` on), dockerfile-language-server,
       markdown-oxide (Obsidian-shaped: wikilinks, backlink code lens,
       daily notes, create-missing-note code action) and harper-ls
-      (offline grammar, also on text/gitcommit). SQL
+      (offline grammar, also on text/gitcommit) — **opt-in since 2026-08-20**:
+      registered by `,sp`/`:Harper` rather than at startup, and `,qf` becomes
+      `:LspCodeAction 1` in prose because `:LspAutoFix` declines any diagnostic
+      with more than one candidate fix, which is every spelling suggestion. SQL
       has no server until the postgres slice — `gq` pipes through sqlfluff
       (postgres dialect, a guess to revisit). Node-based servers ship their
       own pinned `nodejs-slim`, so none of this touches nvm or project

@@ -65,7 +65,7 @@ Every custom key from `modules/home/vim/config.vim`; leader is `,`.
 | `,w` | save |
 | `,<CR>` | clear search highlight |
 | `gb` / `gB` | next / previous buffer |
-| `,sp` | toggle spell check |
+| `,sp` | prose checking on: vim's own `spell` toggles, and harper-ls starts (see LSP) |
 | `*` / `#` (visual) | search down / up for the selection |
 | `^T` | NERDTree toggle |
 | `^P` | fzf file picker (`:Files`) |
@@ -85,13 +85,21 @@ reports itself as unsupported rather than failing silently.
 | `,rn` | `:LspRename` | rename symbol across the workspace |
 | `,f` | — | format (server, else `formatprg`) |
 | `,a` | `:LspCodeAction` | code actions at the cursor, or over a visual range |
-| `,qf` | `:LspAutoFix` | apply the first fix for the problem on this line |
+| `,qf` | `:LspAutoFix` | apply the fix for this line, when the server offers exactly one |
 | `,i` | `:LspOrganizeImports` | organize imports |
 | `,cl` | `:LspCodeLens` | run the code lens on this line |
 | `,lo` | `:LspDocumentSymbol` | outline of this file |
 | `,ls` | `:LspSymbolSearch` | search symbols across the workspace |
 | `,n` / `,p` | `:LspDiag next` / `prev` | next / previous diagnostic |
 | `,ld` | `:LspDiag show` | all diagnostics for the buffer |
+
+**harper-ls is off until asked for.** `,sp` or `:Harper` starts it and it
+attaches to the buffers already open; there is no per-server stop, so it
+stays for the rest of the session. In markdown/text/gitcommit `,qf` becomes
+`:LspCodeAction only:quickfix`, offering the candidate spellings to pick from:
+`:LspAutoFix` only acts when a diagnostic has a single fix, so against
+harper's list of suggestions it would do nothing at all. The `only:quickfix`
+filter keeps the menu to fixes — `,a` remains the everything-on-offer key.
 
 Useful commands with no key: `:LspFixAll`, `:LspPeekReferences`,
 `:LspIncomingCalls` / `:LspOutgoingCalls`, `:LspShowSignature`,
