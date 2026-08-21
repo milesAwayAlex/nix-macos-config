@@ -3,8 +3,9 @@
 Declarative macOS machine configuration: flake-based nix-darwin + home-manager,
 public from day one. The durable record of architecture decisions and the phased
 roadmap lives in [PLAN.md](PLAN.md); operating conventions in
-[DECISIONS.md](DECISIONS.md); the Karabiner chord cheatsheet in
-[KEYBOARD.md](KEYBOARD.md).
+[DECISIONS.md](DECISIONS.md); the steps a fresh machine needs that the flake
+cannot do for itself in [BOOTSTRAP.md](BOOTSTRAP.md); the Karabiner chord
+cheatsheet in [KEYBOARD.md](KEYBOARD.md).
 
 ## Seed record
 
@@ -45,6 +46,11 @@ this repo or the Nix store (PLAN.md, principle 5).
 
 ## Per-machine manual steps
 
+Homebrew installs itself on the first switch (nix-homebrew owns the prefix),
+but a machine that already has apps in `/Applications` needs them adopted
+first, and Karabiner needs two approvals no configuration can grant. Both are
+in [BOOTSTRAP.md](BOOTSTRAP.md).
+
 After the first successful `just switch` on a new machine:
 
     chsh -s /run/current-system/sw/bin/bash
@@ -63,6 +69,15 @@ yet ported into this repo can reuse them:
 
     # anywhere in that flake's home-manager configuration
     imports = [ inputs.nix-macos-config.homeModules.karabiner ];
+
+One export is deliberately not general-purpose: `homeModules.work` holds tools
+that exist only because of the employer's platform choices (D17). It declares
+an unfree package, so it needs an `allowUnfreePredicate` admitting
+`1password-cli` on the consuming side — set from the system layer, since
+`useGlobalPkgs` leaves home-manager without a `nixpkgs.config` (D18).
+
+`darwinModules.homebrew` expects `nix-homebrew.darwinModules.nix-homebrew`
+alongside it; it configures both.
 
 The karabiner module converges `~/.config/karabiner/karabiner.json` on
 activation (a copy, not a symlink — Karabiner mishandles symlinked config);

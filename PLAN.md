@@ -184,11 +184,39 @@ next natural reboot, no dedicated test needed.
 
 ## Phase 3 — App layer: casks, browsers, password managers ☐
 
-- [ ] nix-homebrew with `autoMigrate = true` (adopts existing brew; future machines
-      bootstrap from nothing); Homebrew/tap repos pinned as flake inputs.
-- [ ] Casks (appliance tier unless noted): `karabiner-elements` (adopt the manual
-      bundle install), `1password`, `bitwarden`, `google-chrome`, `firefox`.
-      `homebrew.onActivation.cleanup = "none"` until Phase 5. No `masApps` (unused).
+- [x] **nix-homebrew adopted 2026-08-20**, after being rejected earlier the
+      same day and the rejection reversed. The first pass argued from taps and
+      the release train and treated the install step as a footnote; the install
+      step was the whole question. Homebrew cannot be a nix package — a
+      self-modifying git checkout that writes Cellar, Caskroom and receipts
+      into its own prefix cannot live in a read-only store, and nixpkgs has no
+      `brew` — and using brew as a throwaway activation tool does not work
+      either, because brew's memory of what is installed *is* the prefix.
+      nix-homebrew clones `Homebrew/brew` from a flake input (pinned 6.0.16,
+      Ruby from nixpkgs rather than brew's portable download), which is the
+      only way to get a fresh machine with no curl-bash step. `autoMigrate`
+      adopts the existing prefix, deleting only the git-tracked files of the
+      brew checkout: Homebrew keeps Cellar, Caskroom, bin and `Library/Taps`
+      as ignored state, and all of it survives. So the twelve taps were *not*
+      cleared by migration — untapped by hand 2026-08-20, and the emptied
+      `Library/Taps` directory removed with them, since `is_occupied` fires on
+      existence rather than contents. `enableRosetta = false`,
+      `mutableTaps = false` — with no taps declared that points `Taps` at an
+      empty store path, so `brew tap` cannot write (D16).
+- [x] Casks, `modules/darwin/homebrew.nix` *(2026-08-20)*: `1password`,
+      `google-chrome`, `karabiner-elements`. All three carry `auto_updates`,
+      which is now the admission rule (D16). Dropped from the earlier list:
+      `bitwarden` (unused), `firefox` (not installed — revisit with the
+      `programs.firefox` bullet), `slack` (bootstrap, D17), `ngrok` (unused —
+      cheap to add back), `utm` (no Sparkle updater, so it went to nixpkgs).
+      `cleanup = "none"`, `autoUpdate = false`, `upgrade = false` — the reasons
+      are in D16. Per-host keep-list hook stubbed in `hosts/work.nix`.
+      Karabiner's nix path — nixpkgs `karabiner-elements` 15.7.0 plus
+      nix-darwin's `services.karabiner-elements` — was read and rejected: it
+      rehomes the DriverKit manager and reimplements the daemons against store
+      paths, and Input Monitoring is granted per binary path, so every version
+      bump would need re-approval by hand on a machine whose login window
+      depends on the remap.
 - [ ] Chrome policy baseline (`com.google.Chrome` managed prefs via
       `system.defaults.CustomUserPreferences`): force-install 1Password extension
       (TODO: verify extension ID), minimal hardening keys; leave G Suite/sync alone.
@@ -203,7 +231,17 @@ next natural reboot, no dedicated test needed.
       needing an `allowUnfreePredicate` allowlist, and the app it integrates
       with — `/Applications/1Password.app`, installed manually, adopted as a
       cask here — is the thing that would gate a later biometric-unlock
-      option. Decide CLI source alongside the app, not before.)*
+      option. Decide CLI source alongside the app, not before.)* **2026-08-20:
+      the app is adopted as a cask, so the CLI is decidable. The `1password-cli`
+      cask is *not* `auto_updates`, so it fails D16's admission rule; nixpkgs
+      `_1password-cli` 2.34.0 extracts the official signed `op` from AgileBits'
+      pkg with `dontStrip`, so the signature — and therefore the desktop-app
+      integration — survives. **Settled the same day:** `op` comes from
+      nixpkgs, declared in `modules/home/work.nix` because the use is a
+      company one (D17), with the name allowlisted in
+      `modules/darwin/unfree.nix` (D18). Signature confirmed intact in the
+      store: `com.1password.op`, team `2BUA8C4S2C`, `codesign -v` clean.
+      Still open: the SSH-agent and git-signing half of this bullet.*
 - [ ] Harness bootstrap — **decided 2026-08-20: manual, not activation.** The
       native installer is a one-time step on a machine that needs an
       interactive login anyway, so it lives in `BOOTSTRAP.md` rather than

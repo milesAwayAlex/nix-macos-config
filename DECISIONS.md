@@ -298,3 +298,156 @@ shadows macOS `locate`, whose database GNU `updatedb` does not maintain.
 
 **Revisit when.** Something outside the shell turns out to depend on BSD
 behaviour — reverting is deleting one module.
+
+## D16 — Homebrew is the appliance tier: casks only, self-updating only *(2026-08-20)*
+
+**Decision.** `homebrew.casks` carries GUI applications that update
+themselves; everything else comes from nixpkgs. A cask is admitted only if
+`brew info --json=v2` reports `auto_updates: true` — a cask that does not
+self-update is a frozen copy either way, and nix at least moves it on a
+deliberate `nix flake update`. No formulae, no taps, no `masApps`.
+`onActivation` is `autoUpdate = false`, `upgrade = false`, `cleanup = "none"`.
+nix-homebrew owns the installation, so Homebrew itself is declared too.
+
+**Why.** Three properties keep these apps out of the store, and none of them
+is about the package manager. TCC grants and code-signature checks key on the
+real `/Applications` path, so 1Password's browser integration and Karabiner's
+Input Monitoring break when the bundle moves; the apps ship their own
+updaters, which cannot write to a read-only store; and a browser is the last
+thing that should sit at whatever version a flake was locked to. The
+admission rule falls out of that — self-updating is the *reason* to use a
+cask, so a cask that does not self-update has no argument left.
+
+**Scope and cost.** nix-darwin only renders a Brewfile and shells out to
+`brew bundle`; it does not install Homebrew, and nothing brew installs is a
+store path. So: no rollback (`--rollback` restores the Brewfile, not the
+software), no GC, no offline switch, no dedupe against `home.packages`.
+Declared versions are meaningless by construction — the Brewfile is a list of
+names, brew's recorded version goes stale as each app updates itself, and
+`--upgrade` skips `auto_updates` casks anyway (only `--greedy` reaches them).
+`autoUpdate` stays off so a switch never depends on what the tap says today.
+
+**On `cleanup`.** `"uninstall"` is wanted eventually — it is the only drift
+detector available here, and without it deleting a line from this file does
+nothing on an already-configured machine. It is off because `work` still
+carries a pre-nix Homebrew of 110 formulae, and cleanup would take all of
+them. Flip it after the Phase 5 purge. Two limits to remember when it goes
+on: it sees only brew's own receipts, so manually installed apps (Docker,
+Rancher Desktop) are invisible to it, and `"zap"` deletes configuration and
+data, not just binaries.
+
+**Why nix-homebrew.** Homebrew cannot be a nix package — it is a
+self-modifying git checkout that owns a prefix and writes Cellar, Caskroom
+and receipts into it at runtime, so a read-only store path cannot host it.
+nixpkgs accordingly has no `brew`. nix-homebrew does not package it either:
+it clones `Homebrew/brew` from a flake input into the prefix, which pins
+brew's own version in `flake.lock` and moves it on `nix flake update`. That
+buys the one thing nothing else can — a fresh machine with no curl-bash step
+— and it supplies Ruby from nixpkgs instead of brew's portable download.
+The cost is an input outside the release train, and `autoMigrate` on any
+machine that already has a prefix. Rejected first on the strength of the tap
+argument, which turned out to be the wrong axis; the install step was always
+the real question. `enableRosetta = false`.
+
+**Taps are structurally impossible, not merely undeclared.**
+`mutableTaps = false` with nothing declared makes nix-homebrew point
+`$HOMEBREW_LIBRARY/Taps` at an empty store path, so `brew tap` cannot write —
+the same class of guarantee as the store being read-only, rather than a rule
+that has to be remembered. It also exports `HOMEBREW_NO_AUTO_UPDATE=1`, which
+closes a real gap: `onActivation.autoUpdate = false` governs the switch only,
+so a manual `brew install` could still pull an update. The API path is
+unaffected, because `HOMEBREW_NO_INSTALL_FROM_API` is set only when
+`homebrew/homebrew-core` is declared — verified in the built launcher, which
+carries `NO_AUTO_UPDATE` and not `NO_INSTALL_FROM_API`.
+
+What this costs is trying a tapped tool by hand. Little, now that `nix shell
+nixpkgs#foo` is the ad-hoc path and leaves nothing behind, and all twelve taps
+this machine carried were CLI tools of the kind that now come from nixpkgs. A
+tap that is genuinely needed is a flake input plus a `taps` entry plus a
+`trust.taps` entry — the correct declarative outcome anyway.
+
+**Migration gotcha.** `autoMigrate` deletes only the git-*tracked* files of
+the brew checkout; Cellar, Caskroom, bin and `Library/Taps` are ignored state
+and survive. So taps are not cleared by adoption, and because `is_occupied`
+fires on existence rather than contents, even an emptied `Library/Taps`
+directory aborts activation under `mutableTaps = false`. It has to be removed
+outright — nix-homebrew's own CI does exactly that before its declarative-tap
+test.
+
+**On brew as a throwaway.** Considered and rejected: install the casks at
+activation and discard brew afterwards. It does not work, because brew's
+memory of what is installed *is* the prefix. Discard it and the next switch
+tries to install Chrome again, and `brew install --cask` aborts when the app
+already exists at its `/Applications` path — so every switch after the first
+would fail. Uninstall and upgrade stanzas live there too. The honest version
+of that idea is to drop the declaration and list the three apps in
+`BOOTSTRAP.md` by hand, which trades the reproducible list for nothing but
+one fewer input.
+
+**On third-party taps.** Homebrew 6.0 enables `HOMEBREW_REQUIRE_TAP_TRUST`,
+so a non-official tap reads `trusted: false` and brew will not load its casks
+— which aborts a switch. Both modules can express the fix (nix-homebrew's
+`trust.taps`, nix-darwin's `homebrew.taps.*.trusted`), but with
+`mutableTaps = false` the situation cannot arise.
+
+**Revisit when.** An app we want stops self-updating — then it belongs in
+nixpkgs, not here.
+
+## D17 — Employer-specific tooling is its own module *(2026-08-20)*
+
+**Decision.** Tools that exist only because of the employer's platform
+choices live in `modules/home/work.nix` (first: `spacectl`, `spicedb`), not
+in `pkgs.nix` or a topic module. Applications in the same category — Slack —
+are a `BOOTSTRAP.md` line rather than a cask.
+
+**Why.** These modules are consumed by other flakes (D8), and the personal
+machine has no Spacelift stack and no reason to install a permissions
+database. Mixing them into `pkgs.nix` would make the shared staples list
+untakeable as a whole. The split also survives a job change as a single
+file deletion.
+
+**Why Slack is not a cask.** It is the one app in the set whose presence is
+entirely a function of employment, and it needs an interactive login on a
+company workspace before it does anything — so declaring it saves nothing a
+bootstrap line does not, and it would put a company dependency in the
+system layer that a consumer of these modules cannot decline.
+
+**Revisit when.** The list grows past a handful, or a second employer-shaped
+context appears — then it wants a directory and a naming scheme, not one file.
+
+## D18 — Unfree packages by name, never by blanket *(2026-08-20)*
+
+**Decision.** `nixpkgs.config.allowUnfreePredicate` matches an explicit list
+of package names, declared in `hosts/work.nix` next to the module whose
+packages need it.
+`allowUnfree = true` is not used, and `NIXPKGS_ALLOW_UNFREE` is not the
+mechanism. First and only entry: `1password-cli`.
+
+**Why.** Unfree is not one property — it spans "vendor binary, freely
+redistributable" and "licence forbids redistribution", and the difference
+matters on a public repo. A blanket flag decides all future cases in advance
+and silently; a list makes each one a diff with a comment next to it. The
+cost is one line per package, paid at the moment there is a reason to think
+about it.
+
+**Where it lives.** The system layer, and not by choice: nix-darwin and
+home-manager are separate `evalModules` calls, and `useGlobalPkgs = true`
+drops HM's `nixpkgs.*` module entirely (`useNixpkgsModule = !useGlobalPkgs`),
+so `nixpkgs.config` is not an option a home module can set. Given that, the
+predicate sits in `hosts/work.nix` alongside the `home-manager.users.alexm`
+import that pulls in the package — the closest the two layers can get. A
+consumer taking `homeModules.work` from elsewhere needs their own predicate;
+the README says so.
+
+**On `op` specifically.** The `1password-cli` cask is not `auto_updates`, so
+it fails D16. nixpkgs extracts AgileBits' own `op` from their signed pkg and
+sets `dontStrip` on darwin, so the signature survives relocation into the
+store — verified: identifier `com.1password.op`, team `2BUA8C4S2C`,
+`codesign -v` clean. That is what the desktop app checks before allowing
+biometric unlock, so the integration is unaffected by where the binary sits.
+The version lag against the cask (2.34.0 vs 2.39.0) is the price of a pinned
+tool that moves on a deliberate `nix flake update`.
+
+**Revisit when.** An entry turns out to be redistribution-restricted in a way
+that matters for a public repo, or the list grows past the point where one
+comment each is readable.

@@ -12,6 +12,11 @@
       url = "github:nix-community/home-manager/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # Owns the Homebrew *installation* so a fresh machine needs no curl-bash
+    # (D16). Deliberately outside the release train — it has no nixpkgs input
+    # to follow, only a pin of Homebrew/brew itself.
+    nix-homebrew.url = "github:zhaofengli/nix-homebrew";
+
     # yegappan/lsp, deliberately out-of-nixpkgs (D11). Pinned by flake.lock,
     # independent of the release train; bump via `just update vim9-lsp`.
     vim9-lsp = {
@@ -36,7 +41,10 @@
       darwinConfigurations.work = nix-darwin.lib.darwinSystem {
         modules = [
           ./modules/darwin/core.nix
+          ./modules/darwin/defaults.nix
+          ./modules/darwin/homebrew.nix
           ./modules/darwin/input
+          inputs.nix-homebrew.darwinModules.nix-homebrew
           ./hosts/work.nix
           home-manager.darwinModules.home-manager
           {
@@ -68,6 +76,9 @@
       homeModules.ssh = ./modules/home/ssh.nix;
       homeModules.tmux = ./modules/home/tmux.nix;
       homeModules.vim = ./modules/home/vim;
+      homeModules.work = ./modules/home/work.nix;
+      darwinModules.defaults = ./modules/darwin/defaults.nix;
+      darwinModules.homebrew = ./modules/darwin/homebrew.nix;
       darwinModules.input = ./modules/darwin/input;
 
       # Packages this repo maintains itself because nixpkgs has none (D14).

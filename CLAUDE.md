@@ -24,4 +24,25 @@ Declarative macOS machine configuration: flake-based nix-darwin + home-manager (
   verification when the content is *not* pinned, and the Aikido SafeChain MITM
   proxy is not in the build sandbox's CA bundle. Get the real hash out of band
   (`nix hash path` on an extracted tree) rather than debugging the proxy.
+- Homebrew is the appliance tier: **casks only, and only casks that
+  self-update** (D16). Two bites. `cleanup` is off, so deleting a line here
+  does not remove the app from a machine that already has it. And
+  `brew install --cask` *aborts* if the app already exists at its
+  `/Applications` path and brew did not put it there — during activation that
+  fails the switch, so adopt first: `brew install --cask --adopt <name>`.
+- Homebrew itself is nix-managed: nix-homebrew clones `Homebrew/brew` from a
+  flake input, so brew's version is pinned in `flake.lock` and `brew update`
+  is not how it moves — `nix flake update nix-homebrew` is.
+- Unfree packages need their name in the `allowUnfreePredicate` list in
+  `hosts/work.nix` (D18). It cannot go in a home module: `useGlobalPkgs = true`
+  drops home-manager's `nixpkgs.*` module outright, so `nixpkgs.config` is not
+  an option that exists there. Employer-coupled home modules are imported from
+  the same host file for the same reason — `home-manager.users.alexm.imports`
+  merges cleanly with the assignment in `flake.nix` (verified).
+- `system.defaults` is write-only. nix-darwin emits one `defaults write` per
+  key at activation and never reads back, so removing a key stops it being
+  written but does not restore the old value, and nothing is enforced between
+  switches. It also does not run `activateSettings` or kill Dock/Finder — those
+  changes need a `killall Dock` or a logout. Anything in
+  `/Library/Managed Preferences/` (MDM) outranks all of it.
 - The personal machine (`old`) consumes `homeModules.karabiner` (and optionally `darwinModules.input`) as a flake input; changes here reach it only via a deliberate `nix flake update nix-macos-config` there.
