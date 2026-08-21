@@ -386,6 +386,15 @@ one fewer input.
 stopped working: Homebrew 6.0 enables `HOMEBREW_REQUIRE_TAP_TRUST`, under
 which an untrusted tap will not load and aborts the switch that needs it.
 
+**Brew goes last on `PATH`, and its shell integration is off.**
+`nix-homebrew.enableBashIntegration` is `true` by default and injects
+`eval "$(brew shellenv)"` into interactive shell init, which *prepends*
+`/opt/homebrew/bin` — putting brew ahead of the nix profile and silently
+shadowing every tool both sides provide. The prefix is appended explicitly in
+`modules/home/bash` instead. Nothing is lost: the `HOMEBREW_*` variables brew
+computes from its own location, and `MANPATH`/`INFOPATH` only matter for
+formulae, of which there are none.
+
 **Revisit when.** An app we want stops self-updating — then it belongs in
 nixpkgs, not here.
 

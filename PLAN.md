@@ -369,11 +369,11 @@ Spotlight ☑; `bash --version` ≥ 5 ☑. **Phase 4 complete 2026-08-20.**
       backs the recovery vim), `~/.vim`, `~/.config/coc`, `~/.nvm`, brew's
       google-cloud-sdk, the manual Alacritty and hand-installed Hack TTFs, and
       the dangling `~/git_completion` and `~/.alacritty.yml` symlinks — about
-      6 GB together. 🔴 Also the Spacelift key and `ghp_` PAT in
-      `~/configs/bashconf/.bashrc`, which is a public repo: rotate before it
-      is touched again. The Spacelift half now has somewhere to go (D20) —
-      what remains is issuing a fresh key, deleting the three `SPACELIFT_*`
-      exports from `~/.bashrc.local`, and revoking the old one.
+      6 GB together. The credentials that used to sit in `~/.bashrc.local`
+      and in `~/configs` are gone *(2026-08-21)*: the Spacelift key rotated
+      and moved behind `op run` (D20), the `ghp_` PAT removed, and gitleaks
+      reports the legacy repo clean across both its working tree and all nine
+      of its commits.
 - [x] Touch ID for sudo, `modules/darwin/pam.nix` *(2026-08-20)*:
       `touchIdAuth` plus `reattach`, the second because tmux's server sits in
       another bootstrap session and PAM cannot prompt it — without it nearly
@@ -434,6 +434,11 @@ hypothetical fresh machine.
   colmena `keyCommand` with `op`/`rbw` for push-time injection.
 - Lix experiment: `nix.package = pkgs.lixPackageSets.stable.lix` (+ overlay).
 - Standalone-HM flip on `work` if password-prompt friction proves real.
+- Resolution check: assert that declared tools resolve under
+  `/etc/profiles/per-user/…` or `/run/current-system/sw` rather than brew or
+  `/usr/bin`. A `just` recipe over a list of names, cheap to write and cheap
+  to run. Earns its place because brew's shell integration shadowed four
+  declared tools and nothing in the repo noticed (D16).
 - klfc (JSON → keylayout/XKB/KLC) if the layout ever gets refined cross-platform.
 - Browser extension/policy parity beyond 1Password.
 - Firefox as a declared browser (`programs.firefox`: profile, `user.js`,

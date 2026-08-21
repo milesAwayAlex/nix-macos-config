@@ -36,5 +36,5 @@ in
   # key's public half under IdentitiesOnly.
   programs.ssh.includes = [ "~/.ssh/1Password/config" ];
 
-  programs.bash.shellAliases.spacectl = "op run --env-file=${spaceliftEnv} -- spacectl";
+  programs.bash.shellAliases.spacectl = "op run --env-file=${spaceliftEnv} -- ${pkgs.spacectl}/bin/spacectl";
 }

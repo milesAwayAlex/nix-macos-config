@@ -6,6 +6,7 @@
 # and config.vim drops ~/.vim from plugin discovery. Nothing manually
 # dropped into ~/.vim can leak into the declarative vim.
 {
+  config,
   pkgs,
   vim9-lsp,
   ...
@@ -18,6 +19,13 @@ let
   };
 in
 {
+  # $EDITOR by store path, not by name: a bare `vim` takes whatever PATH
+  # offers, which need not be the vim configured here. Declared from this
+  # module so a consumer of homeModules.bash alone does not pull vim into
+  # their closure, and in initExtra because home-manager sources
+  # hm-session-vars.sh only from .profile — non-login shells never see it.
+  programs.bash.initExtra = "export EDITOR=${config.programs.vim.package}/bin/vim";
+
   programs.vim = {
     enable = true;
 

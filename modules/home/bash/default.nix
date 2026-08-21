@@ -51,7 +51,6 @@
       set -o noclobber
       set -o vi
 
-      export EDITOR=vim
       export NX_DAEMON=false
       export CLAUDE_CODE_NO_FLICKER=1
 

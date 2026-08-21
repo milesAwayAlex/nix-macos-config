@@ -27,6 +27,10 @@
     # HOMEBREW_NO_AUTO_UPDATE=1, which covers manual `brew install` the way
     # onActivation.autoUpdate only covers a switch (D16).
     mutableTaps = false;
+    # `brew shellenv` prepends /opt/homebrew/bin, which lands brew ahead of the
+    # nix profile in every interactive shell and silently shadows any tool both
+    # sides provide. modules/home/bash appends the prefix instead, so nix wins.
+    enableBashIntegration = false;
   };
 
   homebrew = {
