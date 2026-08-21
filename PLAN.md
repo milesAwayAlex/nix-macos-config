@@ -389,7 +389,7 @@ Spotlight ☑; `bash --version` ≥ 5 ☑. **Phase 4 complete 2026-08-20.**
 - [ ] Finish `BOOTSTRAP.md`, the irreducible per-machine manual checklist.
       Written so far: harness install and login, adopting pre-existing casks,
       Karabiner's driver-extension and Input Monitoring approvals, fingerprint
-      enrollment, 1Password sign-in and its agent, Slack. Still to add: nix
+      enrollment, 1Password sign-in with its Touch ID unlock and agent, Slack. Still to add: nix
       installer run, input source plus logout, `chsh`, browser sign-ins.
 - [x] README documents the appliance tier; secrets rules are in README and
       CLAUDE.md, and the gitleaks hook is verified by refusal test.

@@ -58,11 +58,18 @@ path so the login window is remapped too.
 
 ## Touch ID
 
-`modules/darwin/pam.nix` puts Touch ID into sudo's PAM stack, but **enrolling
-a fingerprint is manual and per-user**: System Settings → Touch ID & Password
-→ Add Fingerprint, which asks for the account password. Two prints, one per
-hand, so whichever is free works. Until one exists the PAM stack is inert and
-sudo simply asks for the password as before.
+`modules/darwin/pam.nix` puts Touch ID into sudo's PAM stack, but **enrolling a
+fingerprint is manual and per-user**: System Settings → Touch ID & Password →
+Add Fingerprint, which asks for the account password. Until one exists the PAM
+stack is inert and sudo simply asks for the password as before.
+
+**Autofilling passwords** is the toggle in that pane that governs macOS' own
+AutoFill path — the Passwords app, Safari, and any third-party provider
+registered under General → AutoFill & Passwords, which 1Password does ship one
+for. Nothing here uses that path: the Chrome extension reaches the desktop app
+over 1Password's own channel and is gated by 1Password's Touch ID setting
+instead. Off only means that path would ask for the account password rather
+than a fingerprint; it disables nothing.
 
 The same enrollment backs 1Password's biometric unlock and, through it, `op`.
 
@@ -78,21 +85,25 @@ for.
 
 ## 1Password
 
-The cask installs the app; the rest is a login and two switches under
-Settings → Developer:
+The cask installs the app; the rest is a login and three switches, which live
+in two different panes of the app's own settings:
 
-1. **Use the SSH agent** — creates the socket that `modules/home/work.nix`
-   names as `IdentityAgent` (D19). Until it is on, ssh warns once and falls
-   back to the keys on disk.
-2. **Integrate with 1Password CLI** — lets `op`, which comes from nixpkgs,
-   unlock against the desktop app instead of asking for the account password.
+1. **Security → Unlock using Touch ID.** Gates everything below — without it
+   the vault, the agent's approval prompts and `op` all fall back to typing the
+   account password. Needs a fingerprint already enrolled.
+2. **Developer → Use the SSH agent** — creates the socket that
+   `modules/home/work.nix` names as `IdentityAgent` (D19). Until it is on, ssh
+   warns once and falls back to the keys on disk.
+3. **Developer → Integrate with 1Password CLI** — lets `op`, which comes from
+   nixpkgs, unlock against the desktop app.
 
-Keys are made in the app, not on the machine. The agent offers every ssh key
-in every unlocked vault, in an order set by
-`~/.config/1Password/ssh/agent.toml`; worth narrowing once there is more than
-a handful, because a server stops accepting attempts after six. That file
-stays unmanaged — it names vaults and items, which are per-account, and the
-app writes a working default on first use.
+Keys are made in the app, not on the machine. With no config file the agent
+offers every ssh key in every unlocked vault, in an order you do not control;
+`~/.config/1Password/ssh/agent.toml` narrows and orders that list, and is worth
+writing once there is more than a handful, since a server stops accepting
+attempts after six. It does not exist until you create it — the Developer pane
+has a button — and it stays unmanaged, because it names vaults and items and
+those are per-account.
 
 ## Slack
 
