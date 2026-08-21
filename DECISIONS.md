@@ -477,5 +477,16 @@ which bypasses the agent entirely. Nothing is configured yet: commits from
 this repo carry the personal identity, so the signing key belongs in the
 personal manager and lands with Bitwarden.
 
+**Bookmarked hosts are delegated, not described.** 1Password generates
+`~/.ssh/1Password/config` from a host-URL field on each key item — a
+`Match Host … User …` block per bookmark that pins `IdentityFile` to that
+key's public half under `IdentitiesOnly`, which is the real answer to a
+server's six-attempt limit. The repo declares the `Include` and nothing else.
+Describing those blocks here instead would copy vault contents into a public
+repo and go stale on every key change. The cost is that the pinning is
+machine-local state: on a machine where the bookmarks have not been recreated
+the `Include` resolves to nothing and ssh goes back to offering every key.
+Graceful, but not a guarantee the flake can make.
+
 **Revisit when.** Two managers hold keys on one machine — then `Host *`
 becomes the personal default and work hosts get named blocks.

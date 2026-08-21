@@ -97,6 +97,12 @@ in two different panes of the app's own settings:
 3. **Developer → Integrate with 1Password CLI** — lets `op`, which comes from
    nixpkgs, unlock against the desktop app.
 
+A fourth switch is worth taking once a key exists: **Developer → Generate SSH
+config files**, which writes `~/.ssh/1Password/config` from the host URL on
+each key item. `modules/home/work.nix` already includes that path, so the
+manual `Include` the app asks for is not needed — but the bookmarks themselves
+are per-account and made by hand, one per host.
+
 Keys are made in the app, not on the machine. With no config file the agent
 offers every ssh key in every unlocked vault, in an order you do not control;
 `~/.config/1Password/ssh/agent.toml` narrows and orders that list, and is worth
