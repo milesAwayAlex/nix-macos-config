@@ -490,3 +490,41 @@ Graceful, but not a guarantee the flake can make.
 
 **Revisit when.** Two managers hold keys on one machine — then `Host *`
 becomes the personal default and work hosts get named blocks.
+
+## D20 — Runtime secrets are `op://` references, resolved per command *(2026-08-21)*
+
+**Decision.** A credential a tool needs at runtime lives in 1Password. The
+repo declares a reference file — `NAME=op://vault/item/field` lines — and the
+tool runs under `op run`, which resolves them into that one process's
+environment. Nothing is exported into the shell and nothing lands on disk.
+First instance: `spacectl`, wired in `modules/home/work.nix`.
+
+**Why not the shell profile.** An export in `~/.bashrc.local` puts the
+credential in *every* shell, so every process started from one inherits it —
+the editor, the package manager, the agent. `op run` narrows that to one
+command for its lifetime. The reference file is not a secret, it is a path,
+which is the property that lets the whole arrangement be declared in a public
+repo.
+
+**Shape.** An alias rather than a wrapper script. The real binary stays
+reachable as `command spacectl`, and `op run` authorizes interactively — not
+something to do silently inside someone else's script. The cost is that
+aliases only cover interactive shells; a script that needs the credentials
+says `op run` itself.
+
+**The reference file is a store path**, named directly rather than linked
+into `$HOME`. There is nothing in it to protect, and `home.file` would have
+put the same bytes in the world-readable store anyway — it links store paths
+into the home directory, it does not copy. Naming the path drops a managed
+dotfile and a `$HOME` expansion that happened at alias-use time, and ties the
+references to the generation that declared them.
+
+**Where the boundary is.** Machine-local values that are not secrets — the IT
+cert exports — stay in `~/.bashrc.local` (D10). Deploy-time secrets for a
+server or VM are sops-nix's job once one exists. `op run` is for interactive,
+per-command use by a human at an unlocked vault.
+
+**Revisit when.** A tool wants a credential file rather than environment
+variables, which is `op inject` against a template; or a non-interactive
+context needs the values, which means a service account rather than the
+desktop app.

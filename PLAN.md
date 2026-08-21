@@ -219,13 +219,15 @@ next natural reboot, no dedicated test needed.
       paths, and Input Monitoring is granted per binary path, so every version
       bump would need re-approval by hand on a machine whose login window
       depends on the remap.
-- [ ] Chrome policy baseline (`com.google.Chrome` managed prefs via
-      `system.defaults.CustomUserPreferences`): force-install 1Password extension
-      (TODO: verify extension ID), minimal hardening keys; leave G Suite/sync alone.
-      Defer further policy decisions until felt need.
-- [ ] Firefox: full `programs.firefox` config — profile, `user.js` settings,
-      search engines, NUR extensions (1Password to start) — with the app from the
-      cask (module's package option = null pattern).
+- [x] Chrome policy, `modules/darwin/chrome.nix` *(2026-08-21)*: 1Password
+      force-installed (`aeblfdkhhhdcdjpifhhbdiojplfjncoa`), Chrome's own
+      password manager and address/card autofill off. Written to
+      `/Library/Preferences/com.google.Chrome` — the attribute name reaches
+      `defaults write` verbatim from a root activation script, so a bare
+      domain would land in root's own preferences. Confirmed live in
+      `chrome://policy`. Not forced the way a profile would be; nix-darwin
+      cannot install profiles, so mandatory policy is out of reach. G Suite
+      and sync untouched.
 - [x] 1Password ssh agent *(2026-08-20)*: `Host *` `IdentityAgent` → the
       1Password socket, declared in `modules/home/work.nix` because the
       manager is the company's (D17, D19). The value carries its own quotes —
@@ -234,22 +236,14 @@ next natural reboot, no dedicated test needed.
       step; until then ssh falls back to the keys on disk. Bitwarden is the
       second domain and arrives with `old` in Phase 6.
       *(`op` itself: from nixpkgs, allowlisted in `hosts/work.nix` — D18.)*
-- [ ] Git commit signing over ssh. Deferred with the key it needs: commits
-      from this repo carry the personal identity, so the signing key belongs
-      in Bitwarden rather than the company vault. Not a per-host setting —
-      `ssh-keygen -Y sign` reads `SSH_AUTH_SOCK` and ignores `IdentityAgent`,
-      and 1Password's way past that is `op-ssh-sign` via `gpg.ssh.program`
-      (D19). When it lands, add a signature-required rule to the GitHub
-      ruleset.
 - [x] Harness bootstrap — manual, not activation. The
       native installer is a one-time step on a machine that needs an
       interactive login anyway, so it lives in `BOOTSTRAP.md` rather than
       putting a curl-pipe on the `switch` path. `~/.claude/settings.json`
       stays unmanaged per D13.
 
-**Gate:** `chrome://policy` shows baseline; deleting the Firefox profile and
-rebuilding restores it from repo; `ssh` prompts via 1Password; cask self-updates
-confirmed working (no permission errors).
+**Gate:** `chrome://policy` shows the baseline; `ssh` prompts via 1Password;
+cask self-updates confirmed working (no permission errors).
 
 ## Phase 4 — Shell + CLI environment — **complete 2026-08-20** ☑
 
@@ -377,7 +371,9 @@ Spotlight ☑; `bash --version` ≥ 5 ☑. **Phase 4 complete 2026-08-20.**
       the dangling `~/git_completion` and `~/.alacritty.yml` symlinks — about
       6 GB together. 🔴 Also the Spacelift key and `ghp_` PAT in
       `~/configs/bashconf/.bashrc`, which is a public repo: rotate before it
-      is touched again.
+      is touched again. The Spacelift half now has somewhere to go (D20) —
+      what remains is issuing a fresh key, deleting the three `SPACELIFT_*`
+      exports from `~/.bashrc.local`, and revoking the old one.
 - [x] Touch ID for sudo, `modules/darwin/pam.nix` *(2026-08-20)*:
       `touchIdAuth` plus `reattach`, the second because tmux's server sits in
       another bootstrap session and PAM cannot prompt it — without it nearly
@@ -403,6 +399,13 @@ hypothetical fresh machine.
       `hosts/old.nix` (+ shared modules); `darwin-rebuild switch --flake .#old`.
       Until then it consumes this repo's `homeModules.*` as a flake input.
 - [ ] Take `darwinModules.pam` here too — same sensor, same tmux problem.
+- [ ] Git commit signing over ssh, which lands with Bitwarden. Not a per-host
+      setting: `ssh-keygen -Y sign` reads `SSH_AUTH_SOCK` and ignores
+      `IdentityAgent` (D19). Two shapes are open — Bitwarden's agent on the
+      personal machine only, or a per-machine key in each manager signed
+      through `op-ssh-sign` on `work`; the second keeps a personal credential
+      store off employer-managed hardware. Either way, add a
+      signature-required rule to the GitHub ruleset when it lands.
 - [ ] Converge; **diff the two machines' experience** — every gap found is a repo
       fix, not a local fix.
 
@@ -433,6 +436,9 @@ hypothetical fresh machine.
 - Standalone-HM flip on `work` if password-prompt friction proves real.
 - klfc (JSON → keylayout/XKB/KLC) if the layout ever gets refined cross-platform.
 - Browser extension/policy parity beyond 1Password.
+- Firefox as a declared browser (`programs.firefox`: profile, `user.js`,
+  search engines, NUR extensions). Parked because it is not installed on
+  either machine — this was scope from the template, not a felt need.
 - vaultwarden as declarative NixOS service (self-hosted Bitwarden sync).
 - `nixosConfigurations` for Linux metal/VMs reusing `modules/home/`.
 
@@ -442,12 +448,12 @@ hypothetical fresh machine.
       Kaufmann 1.2.13 bundle, checksum-verified, vendored 2026-08-17.
 - [x] Karabiner config delivery mechanism → copy-on-activation (symlink refuted
       by live test on `work`, 2026-08-15; see Phase 2).
-- [ ] Verify: 1Password Chrome extension ID; bash-from-nix login shell on MDM
+- [x] Verify: 1Password Chrome extension ID; bash-from-nix login shell on MDM
       device. *(Resolved 2026-08-17: login-window input-menu key =
       `showInputMenu` via `CustomSystemPreferences`; Karabiner system config
-      path = `/Library/Application Support/org.pqrs/config/karabiner.json`.)*
+      path = `/Library/Application Support/org.pqrs/config/karabiner.json`.
+      Extension ID confirmed 2026-08-21.)*
 - [x] Decide repo name → **`nix-macos-config`** (github.com/milesAwayAlex).
-- [ ] Firefox user.js starting set (privacy baseline vs. vanilla).
 
 ## Risk register (from the pre-mortem)
 

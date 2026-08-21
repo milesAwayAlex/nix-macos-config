@@ -41,6 +41,7 @@
       darwinConfigurations.work = nix-darwin.lib.darwinSystem {
         modules = [
           ./modules/darwin/core.nix
+          ./modules/darwin/chrome.nix
           ./modules/darwin/defaults.nix
           ./modules/darwin/homebrew.nix
           ./modules/darwin/input
@@ -78,6 +79,7 @@
       homeModules.tmux = ./modules/home/tmux.nix;
       homeModules.vim = ./modules/home/vim;
       homeModules.work = ./modules/home/work.nix;
+      darwinModules.chrome = ./modules/darwin/chrome.nix;
       darwinModules.defaults = ./modules/darwin/defaults.nix;
       darwinModules.homebrew = ./modules/darwin/homebrew.nix;
       darwinModules.input = ./modules/darwin/input;
