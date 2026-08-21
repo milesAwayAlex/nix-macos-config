@@ -545,3 +545,128 @@ per-command use by a human at an unlocked vault.
 variables, which is `op inject` against a template; or a non-interactive
 context needs the values, which means a service account rather than the
 desktop app.
+
+## D21 — The local resolver filters; the tunnel outranks it by design *(2026-08-21)*
+
+**Decision.** DNS filtering runs as local daemons that `networking.dns`
+points the machine at. On a host with a SASE tunnel that is not a compromise
+to route around: the agent writes DNS into the *dynamic* SystemConfiguration
+store for the Wi-Fi service, which masks the *persistent* store
+`networksetup` writes. Measured both ways on `work` — with the tunnel up a
+per-service setting never appears; with it down the same setting takes effect
+immediately. So the stack filters off-tunnel and the corporate resolver
+answers on-tunnel, with no conditional logic anywhere. Nothing leaks to the
+local network either way: the tunnel installs routes covering public space, so
+even a local resolver's recursion egresses at the SASE PoP.
+
+**Port 53 is not freely available on macOS.** mDNSResponder holds `*:53` on
+UDP and TCP on every Mac and is SIP-protected. Binding a specific address over
+a wildcard bind succeeds only if the *second* socket sets `SO_REUSEADDR`; what
+the first socket did is irrelevant. dnsmasq, unbound, AdGuardHome and dnsproxy
+set it. **blocky does not** — it fails `address already in use`, and on every
+address, not just `127.0.0.1`, because the incumbent bind is a wildcard. Hence
+dnsmasq in front doing nothing but forwarding. `SO_REUSEPORT` would also
+satisfy the bind and must not be used: it lets a second process bind the
+identical address:port, which is a query-theft vector.
+
+**Why blocky behind it rather than one daemon.** It fetches and refreshes its
+own lists, so no blocklist hash lands in the repo to go stale daily, and its
+config is read-only — a store path. Each alternative fails one of those.
+unbound's RPZ works (verified against hagezi's 12 MB, 447k-line zone) but
+nixpkgs' unbound has no libcurl, so `rpz: url:` cannot self-fetch. dnsmasq
+reads lists from config at startup only. AdGuardHome rewrites its own YAML at
+runtime, so it cannot take a store path at all. Memory is the other axis, and it is the
+one argument against this shape: hagezi `pro` costs 90 MB under blocky against
+312 MB under unbound RPZ, and full `tif` takes the daemon to 588 MB. Hence
+`tif.medium` — 405k entries and 174 MB against full tif's 2.14M and 588 MB.
+tif is threat intelligence, not ads: malware, phishing, scams, cryptojacking.
+It contributes nothing to ad blocking, so the long tail the full feed buys is
+not worth 500 MB on a laptop, and hagezi's mini/medium cuts drop the
+lowest-confidence feeds rather than a random slice.
+
+**The list has to be `pro.plus`, not `pro`.** `pro` leaves the parent zones of
+the biggest ad networks unwildcarded — it carries 108 `doubleclick.net` lines,
+all specific regional subdomains, so `doubleclick.net` and `ad.doubleclick.net`
+resolve. Blocking everything around them changes almost nothing on a real page,
+which is what "the stack works but ads still load" turned out to be. `pro.plus`
+wildcards `doubleclick.net` and `googlesyndication.com` for 248k entries
+against `pro`'s 224k. It also wildcards `googletagmanager.com`, which hagezi
+exclude from `pro` because that zone breaks consent banners and in-page
+behaviour; it is allowed back as `*.googletagmanager.com`, wildcard because a
+bare domain in an allowlist matches only itself and sites load `gtm.js` from
+`www`. `amazon-adsystem.com` is in neither list. No list reaches same-origin
+ads, which is the standing argument for uBO.
+
+**`connectIPVersion: v4` is not optional here.** There is no IPv6 default route
+off-tunnel, and blocky resolves a list host itself and then dials the address
+it picked, so Go's Happy Eyeballs fallback never runs: an AAAA answer for
+codeberg.org fails all five download attempts. With `loading.strategy: fast`
+that is silent — the daemon serves unfiltered and looks healthy.
+
+**unbound is there for recursion, not blocking.** Full recursion is viable
+here and was verified, `module-config: "respip iterator"` with no forwarder
+resolving correctly through the tunnel; root and authoritative servers both
+answer on outbound UDP/53. It sits on **5335, not 5353** — that port is
+Bonjour, and mDNSResponder owns it. Its DoT sibling is second in blocky's
+`strategy: strict` group for networks that do drop outbound 53.
+
+**launchd has no ordering.** No `after`/`requires` equivalent exists, so the
+stack must tolerate starting in any order: blocky's `startVerifyUpstream`
+stays false (its default), `KeepAlive` handles the rest, and anything that
+exits inside 10 s is throttled to a 10 s respawn. Observed working as intended
+— started against a dead unbound, blocky logs `initial resolver test failed`
+and serves anyway. nix-darwin also wraps every daemon in
+`wait4path /nix/store`, so the store volume being late at boot is handled.
+
+**`strategy: strict` fails over on more than a timeout.** Verified by killing
+unbound mid-session: blocky answered from `tcp-tls:dns.quad9.net` on a
+connection refusal, so the DoT sibling is a real fallback and not just a
+slow-path one. DNSSEC survives the hop — unbound validates, and
+`dnssec-failed.org` still SERVFAILs through the full chain, though the `ad`
+flag does not propagate past blocky, so downstream clients cannot see it.
+
+**Switching while the tunnel owns DNS leaves the stack orphaned.**
+`networksetup -setdnsservers` writes `preferences.plist` for every named
+service, but for the *primary* service, while a NEPacketTunnelProvider owns
+DNS, the live `Setup:/Network/Service/<id>/DNS` key never materialises — and
+disconnecting does not repopulate it. The inactive services take the write
+normally, so three of four look correct. The result is every daemon running,
+`dig @127.0.0.1` blocking correctly, and the machine resolving through DHCP.
+Repair is a forced transition — `just dns-dhcp && just dns-local`, because
+re-writing the value already on disk notifies nothing. It survives tunnel
+cycles afterwards. `just dns-status` prints persisted, live, effective and each
+hop side by side, because `networksetup -getdnsservers` reads the file and
+`scutil --dns` reads the live store, and this failure is exactly the two
+disagreeing.
+
+**Chrome honours the stack.** Listed as untested when scoped resolvers were
+rejected; settled by `BuiltInDnsClientEnabled = false`, which puts Chrome on
+`getaddrinfo`. Verified through that path rather than through Chrome:
+`dscacheutil` returns no addresses and `curl` fails to resolve a blocked
+domain, while a control resolves.
+
+**Rejected: scoped resolvers.** `/etc/resolver/<domain>` files do outrank the
+tunnel — mDNSResponder selects by longest-suffix match, so a domain-scoped
+resolver beats any default one — and they accept a `port` line, which would
+sidestep the port-53 problem too. Rejected because there is no catch-all: you
+enumerate TLDs, everything unlisted is silently unfiltered, and two resolvers
+each owning an arbitrary half of the namespace means every future DNS oddity
+on the machine starts with "which one answered?". Whether Chrome's own
+resolver honours them at all is untested.
+
+**Rejected: browser DoH against a local endpoint.** blocky can serve DoH and
+browsers can be pointed at it by policy, which would work with the tunnel up.
+It needs a certificate the browsers trust, and that breaks principle 5: a TLS
+private key cannot live in the world-readable store, so it would have to be
+generated at activation into root-owned mutable state. `add-trusted-cert` is
+also a trust-store mutation nix cannot roll back, and a local root CA lets
+anything that reads that key mint certificates the browsers accept for any
+site. Kept in reserve only if every other path closes.
+
+**Revisit when.** blocky gains a `ports.reuseAddr` flag — then dnsmasq is
+deleted and blocky takes 53 directly. The upstream shape is already set by the
+merged IP_FREEBIND PR (#2078): opt-in, default off, platform-gated, sockets
+pre-created with a `net.ListenConfig{Control}` hook and served through
+`ActivateAndServe`. Gating matters rather than being merely polite — on Linux
+`SO_REUSEADDR` *does* permit two sockets on the identical UDP address:port,
+which is why `SO_REUSEPORT` acquired a UID check.

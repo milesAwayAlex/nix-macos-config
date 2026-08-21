@@ -10,6 +10,11 @@
       "aeblfdkhhhdcdjpifhhbdiojplfjncoa;https://clients2.google.com/service/update2/crx"
     ];
 
+    # Chrome ships its own resolver and would otherwise read the system's
+    # servers but bypass getaddrinfo. There is no policy for naming a
+    # plain-DNS server, only DoH, so this is how it is held to the machine's.
+    BuiltInDnsClientEnabled = false;
+
     # 1Password is the password manager, so Chrome's own is off
     PasswordManagerEnabled = false;
     AutofillAddressEnabled = false;

@@ -422,6 +422,66 @@ hypothetical fresh machine.
 
 **Gate:** old laptop reaches declared state using only the repo + BOOTSTRAP.md.
 
+## Phase 7 — Local resolver stack ☐
+
+Runs independently of Phases 5 and 6; `old` takes the same module. Source
+material was a NixOS `services.blocky` + `services.unbound` pair
+(`nixos-resolver-stack.nix`, untracked) — almost none of which ports. Settled
+shape after measuring on `work` *(2026-08-21)*: `dnsmasq :53` →
+`blocky :5300` → `unbound :5335`, with `tcp-tls:dns.quad9.net:853` second in
+blocky's `strategy: strict` group for networks that drop outbound 53.
+Rationale and the rejected alternatives are in D21.
+
+- [x] `modules/darwin/dns.nix`: three root `launchd.daemons` — port 53 needs
+      root, so not user agents the way redis is. dnsmasq is a pure forwarder
+      and exists only because blocky cannot bind 53 on macOS; it goes away when
+      the upstream flag lands.
+- [x] `networking.dns = [ "127.0.0.1" ]` + `networking.knownNetworkServices`.
+      nix-darwin's own option: an activation script over
+      `networksetup -setdnsservers`, each service guarded by a `case` against
+      `-listallnetworkservices`, so naming one another host lacks is skipped
+      rather than fatal. Convergent, unlike `system.defaults` — with
+      `dns = []` it passes the literal `empty`, which reverts the service to
+      DHCP.
+- [x] `BuiltInDnsClientEnabled = false` in `modules/darwin/chrome.nix`: forces
+      Chrome onto the system resolver instead of its own DNS stack, so it
+      cannot quietly diverge from the machine's. Chrome has no policy for
+      naming a plain-DNS server, only for DoH.
+- [x] `just dns-local` / `dns-dhcp` — the escape hatch for a dead resolver and
+      for captive portals, wrapping `networksetup -setdnsservers <svc> empty`.
+- [x] Prove blocking engages end to end **on port 53**. The chain is proven on
+      unprivileged ports with the generated configs: `ads.google.com` and the
+      Firefox canary NXDOMAIN, ordinary names resolve, `dnssec-failed.org`
+      SERVFAILs, and killing unbound fails over to Quad9 DoT as `strict`
+      intends, and all three root-only parts are now confirmed on the machine:
+      dnsmasq holds `:53`, unbound runs as `nobody`, and the system resolver
+      NXDOMAINs a blocked domain. Two failures only the real switch exposed,
+      both in D21 — the stack left orphaned when switching mid-tunnel, and
+      `connectIPVersion`, without which list downloads die on AAAA and blocking
+      silently never engages.
+      `blocking.loading.downloads.timeout` has to go well above the default:
+      full hagezi `tif` is 2.14M entries, not the 1.22M first measured, and
+      times out mid-parse at anything shorter; the stack runs `tif.medium`
+      (D21). `blocky validate` will not catch that
+      or much else — it accepted `blockType: notAThing` and a
+      `clientGroupsBlock` naming a list that does not exist, and
+      `log.level: warn` suppresses even its success line.
+- [ ] captive-browser for portals: in nixpkgs for `aarch64-darwin`, 2021
+      vintage, with no nix-darwin or HM option, so the TOML is ours.
+      `dhcp-dns = "ipconfig getoption en0 domain_name_server"` — verified to
+      return the DHCP resolver even while the tunnel owns the system one, which
+      is the whole trick. Open risk is `bind-device`: Linux's
+      `SO_BINDTODEVICE` has no macOS equivalent, so that line may have to go.
+      macOS's own `Captive Network Assistant.app` remains the fallback.
+- [ ] Upstream `ports.reuseAddr` to blocky, modelled on the merged IP_FREEBIND
+      PR (#2078), which already built the `ActivateAndServe` path this needs.
+      No issue exists for it. Not blocking — dnsmasq covers it, and nixpkgs
+      pins 0.29.0 against upstream v0.34.0 anyway.
+
+**Gate:** an ad domain NXDOMAINs off-tunnel; on-tunnel resolution is unchanged;
+`.local` and Bonjour still work; DNS survives a blocky restart.
+
+
 ---
 
 ## Deferred backlog (designed, not scheduled)
@@ -458,8 +518,15 @@ hypothetical fresh machine.
 - klfc (JSON → keylayout/XKB/KLC) if the layout ever gets refined cross-platform.
 - Browser extension/policy parity beyond 1Password.
 - Firefox as a declared browser (`programs.firefox`: profile, `user.js`,
-  search engines, NUR extensions). Parked because it is not installed on
-  either machine — this was scope from the template, not a felt need.
+  search engines, NUR extensions), plus force-installed uBlock Origin via a
+  `/Library/Preferences/org.mozilla.firefox` plist — the same mechanism
+  `modules/darwin/chrome.nix` already uses. Moved up 2026-08-21: it stopped
+  being template scope. Chrome under Manifest V3 cannot run uBlock Origin at
+  all, only uBO Lite with capped static rulesets, and Firefox is the reference
+  platform for the real thing. Element-level blocking is also strictly stronger
+  than DNS, which can never touch a first-party ad served from the content's
+  own origin. Still not scheduled — the resolver stack (Phase 7) is the cheaper
+  win first.
 - vaultwarden as declarative NixOS service (self-hosted Bitwarden sync).
 - `nixosConfigurations` for Linux metal/VMs reusing `modules/home/`.
 

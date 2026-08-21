@@ -43,6 +43,7 @@
           ./modules/darwin/core.nix
           ./modules/darwin/chrome.nix
           ./modules/darwin/defaults.nix
+          ./modules/darwin/dns.nix
           ./modules/darwin/homebrew.nix
           ./modules/darwin/input
           ./modules/darwin/pam.nix
@@ -82,6 +83,7 @@
       homeModules.work = ./modules/home/work.nix;
       darwinModules.chrome = ./modules/darwin/chrome.nix;
       darwinModules.defaults = ./modules/darwin/defaults.nix;
+      darwinModules.dns = ./modules/darwin/dns.nix;
       darwinModules.homebrew = ./modules/darwin/homebrew.nix;
       darwinModules.input = ./modules/darwin/input;
       darwinModules.pam = ./modules/darwin/pam.nix;
