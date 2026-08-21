@@ -56,6 +56,24 @@ Config comes from the repo either way: `modules/home/karabiner` owns
 `karabiner.json` (D2), and `modules/darwin/input` copies it to the pre-login
 path so the login window is remapped too.
 
+## 1Password
+
+The cask installs the app; the rest is a login and two switches under
+Settings → Developer:
+
+1. **Use the SSH agent** — creates the socket that `modules/home/work.nix`
+   names as `IdentityAgent` (D19). Until it is on, ssh warns once and falls
+   back to the keys on disk.
+2. **Integrate with 1Password CLI** — lets `op`, which comes from nixpkgs,
+   unlock against the desktop app instead of asking for the account password.
+
+Keys are made in the app, not on the machine. The agent offers every ssh key
+in every unlocked vault, in an order set by
+`~/.config/1Password/ssh/agent.toml`; worth narrowing once there is more than
+a handful, because a server stops accepting attempts after six. That file
+stays unmanaged — it names vaults and items, which are per-account, and the
+app writes a working default on first use.
+
 ## Slack
 
 Not declared — it exists only because of the employer, and it needs an

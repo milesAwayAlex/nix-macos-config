@@ -74,7 +74,9 @@ One export is deliberately not general-purpose: `homeModules.work` holds tools
 that exist only because of the employer's platform choices (D17). It declares
 an unfree package, so it needs an `allowUnfreePredicate` admitting
 `1password-cli` on the consuming side — set from the system layer, since
-`useGlobalPkgs` leaves home-manager without a `nixpkgs.config` (D18).
+`useGlobalPkgs` leaves home-manager without a `nixpkgs.config` (D18). It also
+points `ssh` at 1Password's agent socket for every host (D19), which is only
+right on a machine where 1Password is the password manager.
 
 `darwinModules.homebrew` expects `nix-homebrew.darwinModules.nix-homebrew`
 alongside it; it configures both.

@@ -41,13 +41,13 @@ principles here say *why*, that file says *how*.
 | GC | `nix.gc.automatic`, `--delete-older-than 14d`, `nix.optimise.automatic` | Never bare `-d`. Module-mode HM = single profile chain. |
 | Shell | **bash** (modern bash 5 from nixpkgs as login shell; macOS ships 3.2) | `programs.bash` in HM; `/etc/shells` via `environment.shells`; one manual `chsh`. |
 | Editor | **vim** (`programs.vim`, plugins from `pkgs.vimPlugins`; LSP via yegappan/lsp, a flake input per D11) | Ported clean 2026-08-19 — the sourced-vimrc escape hatch proved unnecessary after the line-by-line review. |
-| Sudo ergonomics | Work machine: no Touch ID, no NOPASSWD (≈ passwordless root; unacceptable on managed hardware). Personal/old machine: `security.pam.services.sudo_local.touchIdAuth = true`. | Rebuilds are deliberate, infrequent events; browser security does NOT depend on rebuild cadence. |
+| Sudo ergonomics | `security.pam.services.sudo_local.touchIdAuth = true` on any machine with the sensor — both have one. Never NOPASSWD: that is passwordless root, and Touch ID is a second factor rather than the removal of one. | Rebuilds are deliberate, infrequent events, so the prompt is cheap either way. |
 
 ## Machines
 
 | Alias | Hardware | Status |
 |---|---|---|
-| `work` | This laptop, macOS 15.7.7 (Sequoia), **MDM-managed**, no Touch ID, Homebrew present | First target. Phase 0 MDM gate passed; Nix seeded 2026-08-15. |
+| `work` | This laptop, MacBookPro18,2, macOS 15.7.7 (Sequoia), **MDM-managed**, Homebrew present | First target. Phase 0 MDM gate passed; Nix seeded 2026-08-15. |
 | `old` | Old laptop (personal), running its own flake-based nix-darwin + HM config | Host #2. **Live consumer since 2026-08-16**: imports `homeModules.karabiner` via `home-manager.sharedModules` (attrpath renamed per D8 — its flake adopts the new name at its next input bump). Full port into this repo = Phase 6. |
 
 Flake outputs are **alias-named** (`darwinConfigurations.work`, `.old`);
@@ -63,7 +63,7 @@ The justfile resolves the alias (env var `NIXHOST` or `hostname -s` mapping).
       Protect, Perimeter 81 VPN, Vanta compliance agent.
       **No application allowlisting observed** (no Santa/binary authorization);
       Homebrew already present and user-owned (`/opt/homebrew`, alexm:admin);
-      user is admin with sudo (password, no Touch ID).
+      user is admin with sudo.
       Karabiner DriverKit extension (v1.8) **already approved and active** —
       extension-approval path proven on this MDM, and Phase 2's manual grants
       are already done on this machine.
@@ -226,25 +226,22 @@ next natural reboot, no dedicated test needed.
 - [ ] Firefox: full `programs.firefox` config — profile, `user.js` settings,
       search engines, NUR extensions (1Password to start) — with the app from the
       cask (module's package option = null pattern).
-- [ ] Password managers: 1Password SSH agent in `programs.ssh`
-      (`IdentityAgent` → 1Password socket); git signing via SSH key.
-      Bitwarden = second domain; SSH `Match` blocks if/when it holds keys.
-      *(`op` source deferred 2026-08-20: it is nixpkgs' first unfree package,
-      needing an `allowUnfreePredicate` allowlist, and the app it integrates
-      with — `/Applications/1Password.app`, installed manually, adopted as a
-      cask here — is the thing that would gate a later biometric-unlock
-      option. Decide CLI source alongside the app, not before.)* **2026-08-20:
-      the app is adopted as a cask, so the CLI is decidable. The `1password-cli`
-      cask is *not* `auto_updates`, so it fails D16's admission rule; nixpkgs
-      `_1password-cli` 2.34.0 extracts the official signed `op` from AgileBits'
-      pkg with `dontStrip`, so the signature — and therefore the desktop-app
-      integration — survives. **Settled the same day:** `op` comes from
-      nixpkgs, declared in `modules/home/work.nix` because the use is a
-      company one (D17), with the name allowlisted in
-      `modules/darwin/unfree.nix` (D18). Signature confirmed intact in the
-      store: `com.1password.op`, team `2BUA8C4S2C`, `codesign -v` clean.
-      Still open: the SSH-agent and git-signing half of this bullet.*
-- [ ] Harness bootstrap — **decided 2026-08-20: manual, not activation.** The
+- [x] 1Password ssh agent *(2026-08-20)*: `Host *` `IdentityAgent` → the
+      1Password socket, declared in `modules/home/work.nix` because the
+      manager is the company's (D17, D19). The value carries its own quotes —
+      the path has a space in it and an unquoted directive makes ssh reject
+      the whole config file. Switching the agent on in the app is a bootstrap
+      step; until then ssh falls back to the keys on disk. Bitwarden is the
+      second domain and arrives with `old` in Phase 6.
+      *(`op` itself: from nixpkgs, allowlisted in `hosts/work.nix` — D18.)*
+- [ ] Git commit signing over ssh. Deferred with the key it needs: commits
+      from this repo carry the personal identity, so the signing key belongs
+      in Bitwarden rather than the company vault. Not a per-host setting —
+      `ssh-keygen -Y sign` reads `SSH_AUTH_SOCK` and ignores `IdentityAgent`,
+      and 1Password's way past that is `op-ssh-sign` via `gpg.ssh.program`
+      (D19). When it lands, add a signature-required rule to the GitHub
+      ruleset.
+- [x] Harness bootstrap — manual, not activation. The
       native installer is a one-time step on a machine that needs an
       interactive login anyway, so it lives in `BOOTSTRAP.md` rather than
       putting a curl-pipe on the `switch` path. `~/.claude/settings.json`
@@ -383,9 +380,9 @@ Spotlight ☑; `bash --version` ≥ 5 ☑. **Phase 4 complete 2026-08-20.**
       is touched again.
 - [ ] Finish `BOOTSTRAP.md`, the irreducible per-machine manual checklist.
       Written so far: harness install and login, adopting pre-existing casks,
-      Karabiner's driver-extension and Input Monitoring approvals, Slack.
-      Still to add: nix installer run, input source plus logout, `chsh`,
-      1Password sign-in, browser sign-ins.
+      Karabiner's driver-extension and Input Monitoring approvals, 1Password
+      sign-in and its agent, Slack. Still to add: nix installer run, input
+      source plus logout, `chsh`, browser sign-ins.
 - [x] README documents the appliance tier; secrets rules are in README and
       CLAUDE.md, and the gitleaks hook is verified by refusal test.
 
@@ -397,7 +394,8 @@ hypothetical fresh machine.
 - [ ] Port the old laptop's existing nix-darwin + HM config into this repo as
       `hosts/old.nix` (+ shared modules); `darwin-rebuild switch --flake .#old`.
       Until then it consumes this repo's `homeModules.*` as a flake input.
-- [ ] Add `security.pam.services.sudo_local.touchIdAuth = true` if it has Touch ID.
+- [ ] Add `security.pam.services.sudo_local.touchIdAuth = true` here too, if
+      the `work` switch has gone in cleanly.
 - [ ] Converge; **diff the two machines' experience** — every gap found is a repo
       fix, not a local fix.
 
@@ -426,6 +424,10 @@ hypothetical fresh machine.
   colmena `keyCommand` with `op`/`rbw` for push-time injection.
 - Lix experiment: `nix.package = pkgs.lixPackageSets.stable.lix` (+ overlay).
 - Standalone-HM flip on `work` if password-prompt friction proves real.
+- Touch ID for sudo on `work` (`security.pam.services.sudo_local.touchIdAuth`).
+  The sensor is there and enrolled; the option edits `/etc/pam.d/sudo_local`,
+  which MDM may or may not leave alone. Left until the rest has settled, so a
+  broken sudo cannot land in the middle of another change.
 - klfc (JSON → keylayout/XKB/KLC) if the layout ever gets refined cross-platform.
 - Browser extension/policy parity beyond 1Password.
 - vaultwarden as declarative NixOS service (self-hosted Bitwarden sync).

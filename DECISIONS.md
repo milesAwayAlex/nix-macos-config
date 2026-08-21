@@ -447,3 +447,35 @@ tool that moves on a deliberate `nix flake update`.
 **Revisit when.** An entry turns out to be redistribution-restricted in a way
 that matters for a public repo, or the list grows past the point where one
 comment each is readable.
+
+## D19 — The ssh agent is the password manager's, one per machine *(2026-08-20)*
+
+**Decision.** Private ssh keys live in a password manager and are reached
+through its agent socket rather than as files on disk. `work` uses 1Password,
+named by `IdentityAgent` under `Host *` in `modules/home/work.nix` — the
+company's manager, so it sits with the rest of the employer-coupled config
+(D17). The personal machine gets Bitwarden the same way when it is ported.
+Keys already on disk stay until each is re-created in a vault.
+
+**Why `IdentityAgent` and not `SSH_AUTH_SOCK`.** The directive is per-host, so
+a second manager is a named block rather than a fight over one inherited
+environment variable, and macOS' own launchd agent stays the default for
+anything not named. `Host *` says the quiet part: a machine has one of these.
+
+**The value has to carry its own quotes.** The socket path contains a space
+and home-manager renders directives verbatim. Unquoted, ssh does not skip the
+line — it rejects the entire config file (`extra arguments at end of line`,
+then `terminating`), so every ssh on the machine breaks at once. A socket that
+does not exist yet is the benign case: a warning, then fall-through to the
+on-disk keys.
+
+**Signing is a different mechanism, not a second host.** `gpg.format = ssh`
+makes git shell out to `ssh-keygen -Y sign`, which reads `SSH_AUTH_SOCK` and
+never parses `ssh_config` — so `IdentityAgent` cannot scope it. 1Password's
+answer is `op-ssh-sign` in the app bundle, pointed at by `gpg.ssh.program`,
+which bypasses the agent entirely. Nothing is configured yet: commits from
+this repo carry the personal identity, so the signing key belongs in the
+personal manager and lands with Bitwarden.
+
+**Revisit when.** Two managers hold keys on one machine — then `Host *`
+becomes the personal default and work hosts get named blocks.

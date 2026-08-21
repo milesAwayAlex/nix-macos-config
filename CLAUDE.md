@@ -11,7 +11,7 @@ Declarative macOS machine configuration: flake-based nix-darwin + home-manager (
 
 ## Workflow
 
-- `just switch` / `build` / `check` / `update [input]` / `gc`. Host resolved via `NIXHOST` (default `work`). Rebuilds are deliberate events; sudo password prompts are expected (no Touch ID, no NOPASSWD on `work`).
+- `just switch` / `build` / `check` / `update [input]` / `gc`. Host resolved via `NIXHOST` (default `work`). Rebuilds are deliberate events; sudo password prompts are expected — Touch ID for sudo is not wired up yet, and NOPASSWD never will be.
 - Flakes cannot see untracked files — `git add` new files before any flake command, or the eval fails confusingly.
 - The gitleaks pre-commit hook is versioned in `.githooks/` and activates automatically on HM-configured machines via the `hasconfig` include in `modules/home/git.nix` (D7/D9); on machines without this HM config, activate per clone: `git config core.hooksPath .githooks`.
 
