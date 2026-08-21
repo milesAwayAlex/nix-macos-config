@@ -81,6 +81,9 @@ right on a machine where 1Password is the password manager.
 `darwinModules.homebrew` expects `nix-homebrew.darwinModules.nix-homebrew`
 alongside it; it configures both.
 
+`darwinModules.pam` enables Touch ID for sudo and does nothing at all until a
+fingerprint is enrolled by hand, which no configuration can do.
+
 The karabiner module converges `~/.config/karabiner/karabiner.json` on
 activation (a copy, not a symlink — Karabiner mishandles symlinked config);
 local edits to the live file are overwritten on every switch. Updates are

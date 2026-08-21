@@ -56,6 +56,26 @@ Config comes from the repo either way: `modules/home/karabiner` owns
 `karabiner.json` (D2), and `modules/darwin/input` copies it to the pre-login
 path so the login window is remapped too.
 
+## Touch ID
+
+`modules/darwin/pam.nix` puts Touch ID into sudo's PAM stack, but **enrolling
+a fingerprint is manual and per-user**: System Settings → Touch ID & Password
+→ Add Fingerprint, which asks for the account password. Two prints, one per
+hand, so whichever is free works. Until one exists the PAM stack is inert and
+sudo simply asks for the password as before.
+
+The same enrollment backs 1Password's biometric unlock and, through it, `op`.
+
+Check it from **inside tmux** once the switch has gone in — `sudo -k && sudo -v`
+should raise the Touch ID prompt rather than ask for a password. That path is
+the entire reason `pam_reattach` is in the stack; outside tmux it would work
+either way.
+
+Touch ID never applies to the first unlock after a restart, to a session more
+than 48 hours since the last unlock, after five failed reads, or over ssh. The
+password is the credential underneath, and those are the moments it is asked
+for.
+
 ## 1Password
 
 The cask installs the app; the rest is a login and two switches under

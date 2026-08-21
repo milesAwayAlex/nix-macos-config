@@ -378,11 +378,19 @@ Spotlight ☑; `bash --version` ≥ 5 ☑. **Phase 4 complete 2026-08-20.**
       6 GB together. 🔴 Also the Spacelift key and `ghp_` PAT in
       `~/configs/bashconf/.bashrc`, which is a public repo: rotate before it
       is touched again.
+- [x] Touch ID for sudo, `modules/darwin/pam.nix` *(2026-08-20)*:
+      `touchIdAuth` plus `reattach`, the second because tmux's server sits in
+      another bootstrap session and PAM cannot prompt it — without it nearly
+      every sudo here would fall back to the password anyway. nix-darwin
+      already owned `/etc/pam.d/sudo_local` and macOS already included it, so
+      there was no file to adopt. `sufficient`/`optional` mean no state of the
+      stack can lock sudo out. Fingerprint enrollment is manual (BOOTSTRAP).
+      No MDM profile restricts biometrics on this machine.
 - [ ] Finish `BOOTSTRAP.md`, the irreducible per-machine manual checklist.
       Written so far: harness install and login, adopting pre-existing casks,
-      Karabiner's driver-extension and Input Monitoring approvals, 1Password
-      sign-in and its agent, Slack. Still to add: nix installer run, input
-      source plus logout, `chsh`, browser sign-ins.
+      Karabiner's driver-extension and Input Monitoring approvals, fingerprint
+      enrollment, 1Password sign-in and its agent, Slack. Still to add: nix
+      installer run, input source plus logout, `chsh`, browser sign-ins.
 - [x] README documents the appliance tier; secrets rules are in README and
       CLAUDE.md, and the gitleaks hook is verified by refusal test.
 
@@ -394,8 +402,7 @@ hypothetical fresh machine.
 - [ ] Port the old laptop's existing nix-darwin + HM config into this repo as
       `hosts/old.nix` (+ shared modules); `darwin-rebuild switch --flake .#old`.
       Until then it consumes this repo's `homeModules.*` as a flake input.
-- [ ] Add `security.pam.services.sudo_local.touchIdAuth = true` here too, if
-      the `work` switch has gone in cleanly.
+- [ ] Take `darwinModules.pam` here too — same sensor, same tmux problem.
 - [ ] Converge; **diff the two machines' experience** — every gap found is a repo
       fix, not a local fix.
 
@@ -424,10 +431,6 @@ hypothetical fresh machine.
   colmena `keyCommand` with `op`/`rbw` for push-time injection.
 - Lix experiment: `nix.package = pkgs.lixPackageSets.stable.lix` (+ overlay).
 - Standalone-HM flip on `work` if password-prompt friction proves real.
-- Touch ID for sudo on `work` (`security.pam.services.sudo_local.touchIdAuth`).
-  The sensor is there and enrolled; the option edits `/etc/pam.d/sudo_local`,
-  which MDM may or may not leave alone. Left until the rest has settled, so a
-  broken sudo cannot land in the middle of another change.
 - klfc (JSON → keylayout/XKB/KLC) if the layout ever gets refined cross-platform.
 - Browser extension/policy parity beyond 1Password.
 - vaultwarden as declarative NixOS service (self-hosted Bitwarden sync).
