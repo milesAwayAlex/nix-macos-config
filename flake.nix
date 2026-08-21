@@ -46,6 +46,7 @@
           ./modules/darwin/homebrew.nix
           ./modules/darwin/input
           ./modules/darwin/pam.nix
+          ./modules/darwin/redis.nix
           inputs.nix-homebrew.darwinModules.nix-homebrew
           ./hosts/work.nix
           home-manager.darwinModules.home-manager
@@ -84,6 +85,7 @@
       darwinModules.homebrew = ./modules/darwin/homebrew.nix;
       darwinModules.input = ./modules/darwin/input;
       darwinModules.pam = ./modules/darwin/pam.nix;
+      darwinModules.redis = ./modules/darwin/redis.nix;
 
       # Packages this repo maintains itself because nixpkgs has none (D14).
       packages.${system}.kube-fzf = pkgs.callPackage ./packages/kube-fzf.nix { };

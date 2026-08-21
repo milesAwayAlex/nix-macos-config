@@ -363,8 +363,19 @@ Spotlight ☑; `bash --version` ≥ 5 ☑. **Phase 4 complete 2026-08-20.**
 
 ## Phase 5 — Converge and enforce ☐
 
-- [ ] Reconcile Phase 0 inventory: every app/package either declared or consciously
-      dropped. Then flip `homebrew.onActivation.cleanup = "zap"`. Carried in
+- [x] Reconcile Phase 0 inventory *(2026-08-21)*: everything brew carried is
+      either declared here or consciously dropped, and
+      `homebrew.onActivation.cleanup = "uninstall"` is on. The four
+      third-party-tap formulae had to go by hand first — cleanup resolves
+      every installed formula and aborts on a tap that no longer exists, so
+      it would have failed the switch rather than skipping them. Dry run
+      after that: 3 casks (`1password-cli`, `gcloud-cli`, `temurin@17`) and
+      99 formulae, all superseded by nixpkgs, orphaned build dependencies, or
+      dropped by decision. Redis was the one worth keeping and came back as a
+      declared service rather than a brew keeper (`modules/darwin/redis.nix`);
+      its brew copy goes with the rest. `"zap"` stays off for the reason in
+      D16.
+- [ ] Deletion pass, carried in
       from Phase 4 as one deletion pass: `~/configs` (all but `vimconf`, which
       backs the recovery vim), `~/.vim`, `~/.config/coc`, `~/.nvm`, brew's
       google-cloud-sdk, the manual Alacritty and hand-installed Hack TTFs, and
@@ -428,6 +439,11 @@ hypothetical fresh machine.
 - `nix.linux-builder` (sized: ~4 cores / 6 GB on small machines; launchd
   `ProcessType = "Interactive"`; aarch64-linux only — no x86 via QEMU).
 - colima (`--vm-type vz`) + docker CLI + k3d/kind for containers/k8s.
+- Postgres from nixpkgs — the "postgres slice" the sqlfluff bullet in Phase 4
+  defers to, which also settles that linter's dialect and whether a SQL
+  language server is worth having. `Postgres.app` is a manual install with no
+  brew receipt, so it is invisible to brew cleanup and survives regardless.
+  Redis took this route already (`modules/darwin/redis.nix`).
 - NixOS VMs: nixos-lima (headless), vfkit/phaer setup (GUI 2D), UTM+virgl (GUI 3D);
   NixOS test framework for multi-node network labs.
 - sops-nix (age keys held in 1Password) when first server/VM needs deploy secrets;

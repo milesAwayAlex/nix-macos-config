@@ -43,10 +43,13 @@
       # Unwanted and also moot — `--upgrade` skips auto_updates casks (only
       # `--greedy` reaches them) and there are no formulae left for it to move.
       upgrade = false;
-      # The drift detector we want, but not yet: "uninstall" removes every
-      # brew package this file does not name, and the pre-nix Homebrew on
-      # `work` is still full of them. Flip it after the Phase 5 purge (D16).
-      cleanup = "none";
+      # The drift detector: anything brew installed that this file does not
+      # name is uninstalled, so deleting a line here actually removes the
+      # package. Not `"zap"` — zap also runs each cask's zap stanza, and
+      # `1password-cli`'s trashes ~/.config/op, which the nixpkgs `op` uses
+      # (D16). Verify before flipping to zap; `brew bundle cleanup` without
+      # `--force` prints what it would do.
+      cleanup = "uninstall";
     };
 
     # Nothing from a third-party tap: Homebrew 6.0 requires those to be

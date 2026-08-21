@@ -325,14 +325,22 @@ names, brew's recorded version goes stale as each app updates itself, and
 `--upgrade` skips `auto_updates` casks anyway (only `--greedy` reaches them).
 `autoUpdate` stays off so a switch never depends on what the tap says today.
 
-**On `cleanup`.** `"uninstall"` is wanted eventually — it is the only drift
-detector available here, and without it deleting a line from this file does
-nothing on an already-configured machine. It is off because `work` still
-carries a pre-nix Homebrew of 110 formulae, and cleanup would take all of
-them. Flip it after the Phase 5 purge. Two limits to remember when it goes
-on: it sees only brew's own receipts, so manually installed apps (Docker,
-Rancher Desktop) are invisible to it, and `"zap"` deletes configuration and
-data, not just binaries.
+**On `cleanup`.** `"uninstall"` is on: it is the only drift detector
+available here, and without it deleting a line from this file does nothing on
+a machine that already has the package. Two limits to remember: it sees only
+brew's own receipts, so manually installed apps (Docker, Rancher Desktop) are
+invisible to it, and it aborts outright — cleaning nothing — if any installed
+formula comes from a tap that is no longer present, which under
+`mutableTaps = false` means every third-party formula must be uninstalled by
+hand first.
+
+**Why not `"zap"`.** Zap additionally runs each cask's own zap stanza, which
+deletes configuration rather than binaries, and those stanzas are written
+without knowledge of this setup: `1password-cli`'s trashes `~/.config/op` —
+the config and session of the `op` that now comes from nixpkgs (D18). Zap
+becomes the better detector once no cask on the machine shares a path with
+something declared, and `brew bundle cleanup` without `--force` is the check:
+it prints every uninstall and every zap target and changes nothing.
 
 **Why nix-homebrew.** Homebrew cannot be a nix package — it is a
 self-modifying git checkout that owns a prefix and writes Cellar, Caskroom
