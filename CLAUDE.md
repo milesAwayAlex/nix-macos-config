@@ -20,10 +20,8 @@ Declarative macOS machine configuration: flake-based nix-darwin + home-manager (
 - `modules/home/karabiner/karabiner.json` is canonical. The live file at `~/.config/karabiner/karabiner.json` is converge-copied on switch — never edit the live file; edits are silently overwritten (D2). The same file is also copied to Karabiner's pre-login path by `modules/darwin/input`, so login-window typing depends on it.
 - Inputs are a matched 26.05 release-train set (nixpkgs-26.05-darwin + nix-darwin-26.05 + home-manager release-26.05) — bump all three together, never individually (D6).
 - A **placeholder `hash`** in a `fetchFromGitHub`/`fetchurl` fails here with a
-  TLS error, not a hash mismatch: nixpkgs only enables certificate
-  verification when the content is *not* pinned, and the Aikido SafeChain MITM
-  proxy is not in the build sandbox's CA bundle. Get the real hash out of band
-  (`nix hash path` on an extracted tree) rather than debugging the proxy.
+  TLS error rather than a hash mismatch. Get the real hash out of band
+  (`nix hash path` on an extracted tree); the network is not the problem.
 - Homebrew is the appliance tier: **casks only, and only casks that
   self-update** (D16). Two bites. `cleanup` is off, so deleting a line here
   does not remove the app from a machine that already has it. And

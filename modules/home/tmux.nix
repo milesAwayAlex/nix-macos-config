@@ -1,11 +1,8 @@
-# tmux, ported 2026-08-18 from ~/configs/tmux/.tmux.conf after review against
-# the 3.6a man page. Hand-rolled, no plugins. Deltas from the legacy file:
-# default-terminal xterm-256color -> tmux-256color (the man requires a
-# screen/tmux derivative; macOS ships the entry in /usr/share/terminfo),
-# truecolor advertised for the alacritty outer (its terminfo lacks RGB, and
-# the old ",xterm*:RGB" pattern never matched it), focus-events on (for
-# editor autoread later), and redundant-with-default lines dropped
-# (set-titles off, automatic-rename on, visual-activity off).
+# tmux, hand-rolled, no plugins. default-terminal must name a screen/tmux
+# derivative per the man page, and macOS ships the tmux-256color entry in
+# /usr/share/terminfo. Truecolor is advertised per-outer rather than by
+# pattern because alacritty's terminfo lacks RGB. focus-events is on for
+# editor autoread.
 { pkgs, ... }:
 {
   programs.tmux = {

@@ -63,7 +63,7 @@
       . ${./prompt.bash}
 
       # Machine-local hook (D10), deliberately last: IT/EDR cert exports and
-      # parked per-machine tooling (nvm, gcloud, deno, ...) live there.
+      # anything this machine alone needs on PATH live there.
       [ -r "$HOME/.bashrc.local" ] && . "$HOME/.bashrc.local"
     '';
   };

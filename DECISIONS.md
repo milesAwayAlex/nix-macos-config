@@ -157,9 +157,9 @@ about (then: contest it per-repo with local config, or negotiate with IT).
 **Decision.** `programs.bash` owns `.bashrc`/`.bash_profile`/`.profile`/
 `.bash_logout`. The last line of the managed bashrc sources
 `~/.bashrc.local` if present — an unmanaged, machine-local file for IT/EDR
-cert exports (Aikido) and parked per-machine tooling (nvm, gcloud, deno,
-Spacelift-after-rotation, Postgres PATH). Secrets never go in managed shell
-files; ambient-env secrets move to 1Password wiring when that step lands.
+cert exports (Aikido) and anything one machine alone needs on PATH. Secrets
+never go in managed shell files; ambient-env secrets move to 1Password wiring
+when that step lands.
 
 **Why.** Same split as D9, adapted: bash has no native two-global-files
 mechanism, so the hook provides one. Aikido rewrites shell rc files in
@@ -172,7 +172,7 @@ against HM's read-only symlinks that fails or replaces the link. The next
 moving the fresh Aikido block into `~/.bashrc.local` and re-switching.
 
 **Revisit when.** Aikido's write behavior turns out to be more aggressive
-than observed, or the 1Password/secrets step re-homes the parked tooling.
+than observed, or the 1Password/secrets step re-homes what the hook carries.
 
 ## D11 — Out-of-nixpkgs vim plugins ride flake inputs *(2026-08-19)*
 
@@ -213,15 +213,13 @@ has its own plugin mechanism that writes into its install directory
 handled at the project boundary: `nix shell nixpkgs#nodejs_20` for a
 one-off, dev shells + direnv if it becomes routine.
 
-**Why.** The managers were not being used as managers. Every `.nvmrc` under
-`~/code` said `v22` while nvm carried three unused majors; gcloud sat at
-463.0.0 from 2024-02, and the `kubectl` it dispatched was 1.27 against 1.35
-control planes — an eight-minor skew that kubectl itself warned about on
-every call. An imperative updater only helps if someone runs it, and nobody
-does; the weekly lock bump is the update ritual that actually happens. The
-genuine per-repo variance turned out to be pnpm (7.33 / 9.15 / 10.10 via
-`packageManager`), which corepack resolves from the repo itself and needs no
-manager at all.
+**Why.** The managers were not being used as managers — the pinned versions
+went stale by years and the dispatched `kubectl` drifted eight minors from
+the control planes it talked to. An imperative updater only helps if someone
+runs it, and nobody does; the lock bump is the update ritual that actually
+happens. The one genuine per-repo variance is pnpm, and `packageManager`
+already encodes it: the packaged launcher re-execs whatever a repo names, so
+no manager is needed for that either.
 
 **Revisit when.** A repo pins a node major the pinned one cannot satisfy
 (then: dev shell, not nvm), or a vendor CLI ships a component that nixpkgs
@@ -384,11 +382,9 @@ of that idea is to drop the declaration and list the three apps in
 `BOOTSTRAP.md` by hand, which trades the reproducible list for nothing but
 one fewer input.
 
-**On third-party taps.** Homebrew 6.0 enables `HOMEBREW_REQUIRE_TAP_TRUST`,
-so a non-official tap reads `trusted: false` and brew will not load its casks
-— which aborts a switch. Both modules can express the fix (nix-homebrew's
-`trust.taps`, nix-darwin's `homebrew.taps.*.trusted`), but with
-`mutableTaps = false` the situation cannot arise.
+**On third-party taps.** Losing them costs nothing because they had already
+stopped working: Homebrew 6.0 enables `HOMEBREW_REQUIRE_TAP_TRUST`, under
+which an untrusted tap will not load and aborts the switch that needs it.
 
 **Revisit when.** An app we want stops self-updating — then it belongs in
 nixpkgs, not here.

@@ -78,21 +78,22 @@ The justfile resolves the alias (env var `NIXHOST` or `hostname -s` mapping).
       insurance on a managed device. (3) Kandji may *force* macOS updates on
       IT's schedule — inverts our "never day-one" policy, so keep the lock file
       current enough that post-macOS-update nix-darwin fixes are available.
-- [ ] `chrome://management` — note what's already centrally managed (manual,
-      in-browser).
-- [ ] Inventory into repo as raw material: `brew bundle dump`, `ls /Applications`,
-      current dotfiles (`.bashrc`, `.vimrc`, `.tmux.conf`, karabiner.json, ssh config),
-      interesting `defaults` domains, any existing nix.
-      *(Now the main Phase 0 leftover — do before Phase 3's nix-homebrew
-      autoMigrate; it's the raw material for Phase 5 reconciliation. The brew
-      formula set already shrank by nine on 2026-08-18.)*
-- [ ] Time Machine snapshot. *(Skipped ahead of the Nix seed — installer is
-      receipt-reversible; still wanted before Phase 2 root activation.)*
+- [x] `chrome://management` reports the browser **not** centrally managed, so
+      a Chrome policy baseline written to `/Library/Preferences` should take
+      (Phase 3).
+- [x] Inventory taken 2026-08-20 — brew bundle dump, applications, dotfile
+      ownership, `defaults` domains — as `INVENTORY.md`, deliberately
+      **uncommitted**: it is a machine manifest, and the repo is public. Same
+      for `DEFAULTS-REVIEW.md`, the 197 typed `system.defaults` keys read off
+      this machine and diffed against their documented defaults.
+- [x] Time Machine snapshot **dropped 2026-08-20** — the installer is
+      receipt-reversible and the migration is far enough along that rolling
+      back is the larger risk.
 - [x] Create **public** GitHub repo: **`nix-macos-config`** (this repo) — plan +
       README recording decisions, gitleaks pre-commit hook from commit one, MIT
       license. *(2026-08-15)*
 
-**Gate:** MDM verdict positive; inventory committed.
+**Gate:** MDM verdict positive; inventory taken.
 
 ## Phase 1 — Seed + skeleton — **complete 2026-08-18** ☑
 
@@ -146,9 +147,14 @@ unavoidable; type that password in QWERTY).
 - [x] Login-window input menu:
       `system.defaults.CustomSystemPreferences."com.apple.loginwindow".showInputMenu`
       (nix-darwin has no typed option for it — checked against 26.05 source).
-- [ ] Karabiner-Elements app: currently a manually-installed bundle (brew cask was
-      broken at install time) — adopt as cask in Phase 3 (`--force`/adopt moment;
-      recheck whether the cask works).
+- [x] Karabiner-Elements app declared as a cask *(2026-08-20)*: the cask runs
+      the official pqrs `.pkg`, so it is the same installer by another name,
+      and it is `auto_updates` (D16). The nix path — nixpkgs
+      `karabiner-elements` plus nix-darwin's `services.karabiner-elements` —
+      was rejected: it rehomes the DriverKit manager and reimplements the
+      daemons against store paths, and Input Monitoring is granted per binary
+      path, so every version bump would need re-approval by hand on the
+      machine whose login window depends on the remap.
 - [x] Config delivery — **decided 2026-08-15: copy-on-activation.** Symlink
       refuted by live test on `work`: the watcher misses edits made through
       the link AND GUI edits replace the link. HM `home.activation` (after
@@ -184,25 +190,21 @@ next natural reboot, no dedicated test needed.
 
 ## Phase 3 — App layer: casks, browsers, password managers ☐
 
-- [x] **nix-homebrew adopted 2026-08-20**, after being rejected earlier the
-      same day and the rejection reversed. The first pass argued from taps and
-      the release train and treated the install step as a footnote; the install
-      step was the whole question. Homebrew cannot be a nix package — a
+- [x] **nix-homebrew** *(2026-08-20)* owns the Homebrew installation, so a
+      fresh machine needs no curl-bash. Homebrew cannot be a nix package — a
       self-modifying git checkout that writes Cellar, Caskroom and receipts
       into its own prefix cannot live in a read-only store, and nixpkgs has no
-      `brew` — and using brew as a throwaway activation tool does not work
-      either, because brew's memory of what is installed *is* the prefix.
-      nix-homebrew clones `Homebrew/brew` from a flake input (pinned 6.0.16,
-      Ruby from nixpkgs rather than brew's portable download), which is the
-      only way to get a fresh machine with no curl-bash step. `autoMigrate`
-      adopts the existing prefix, deleting only the git-tracked files of the
-      brew checkout: Homebrew keeps Cellar, Caskroom, bin and `Library/Taps`
-      as ignored state, and all of it survives. So the twelve taps were *not*
-      cleared by migration — untapped by hand 2026-08-20, and the emptied
-      `Library/Taps` directory removed with them, since `is_occupied` fires on
-      existence rather than contents. `enableRosetta = false`,
-      `mutableTaps = false` — with no taps declared that points `Taps` at an
-      empty store path, so `brew tap` cannot write (D16).
+      `brew` — and brew cannot be a throwaway activation tool either, because
+      its memory of what is installed *is* the prefix. nix-homebrew clones
+      `Homebrew/brew` from a flake input (pinned 6.0.16, Ruby from nixpkgs
+      rather than brew's portable download). `autoMigrate` adopts an existing
+      prefix by deleting only the git-tracked files of the checkout; Cellar,
+      Caskroom, bin and `Library/Taps` are ignored state and survive.
+      `enableRosetta = false`; `mutableTaps = false`, which with no taps
+      declared points `Taps` at an empty store path so `brew tap` cannot write
+      (D16). The twelve taps this machine carried were untapped by hand and
+      the emptied `Library/Taps` directory removed with them, since it blocks
+      activation whenever it exists as a real directory.
 - [x] Casks, `modules/darwin/homebrew.nix` *(2026-08-20)*: `1password`,
       `google-chrome`, `karabiner-elements`. All three carry `auto_updates`,
       which is now the admission rule (D16). Dropped from the earlier list:
@@ -254,205 +256,116 @@ confirmed working (no permission errors).
 
 ## Phase 4 — Shell + CLI environment — **complete 2026-08-20** ☑
 
-- [x] **bash + ssh** *(config slice done 2026-08-18)*: `~/configs/bashconf`
-      reviewed line-by-line → `programs.bash` + `programs.readline` in
-      `modules/home/bash/` (prompt sanitized into `prompt.bash`; `history -a`
-      added for cross-tmux-pane history; HISTSIZE 100k). 🔴 Review found a
-      live Spacelift API key + a commented `ghp_` PAT exported in the tracked
-      `.bashrc` of the **public** configs repo — never committed (verified
-      `log -S` empty), rotation on Alex; Spacelift stays machine-local until
-      the 1Password step. Machine-local hook = `~/.bashrc.local` (**D10**):
-      Aikido cert blocks, nvm, gcloud (Phase 3), deno, Postgres PATH
-      (postgres itself deferred; the line only provides psql). Dropped:
-      Intel brew + `ibrew`, jenv, tabtab, Rancher PATH, cargo, vendored 2023
-      completions (nix bash-completion framework instead — test lazy-load,
-      may need darwin `environment.pathsToLink`). PATH: own bins prepended,
-      brew appended — nix wins by construction. `programs.ssh` in
-      `modules/home/ssh.nix` (`settings` shape; ControlPath moved from a
-      predictable /tmp name to hashed `~/.ssh/cm-%C`). Login-shell flip:
-      `environment.shells = [ pkgs.bashInteractive ]` in darwin core;
-      manual once: `chsh -s /run/current-system/sw/bin/bash` (if `/run` ever
-      breaks, `/bin/bash` remains the rescue shell). Pre-switch: populate
-      `~/.bashrc.local`, then remove `~/.bashrc` `~/.bash_profile`
-      `~/.profile` `~/.inputrc` `~/.ssh/config`. Post-slice fixes
-      2026-08-18: guarded `. /etc/bashrc` in bashrcExtra (non-login shells
-      otherwise get no nix env) and tmux `set-environment -gr` on the
-      set-environment guard (path_helper demotes nix dirs in login panes
-      while the inherited guard blocks the rebuild — /usr/bin/git had been
-      shadowing nix git inside tmux since the brew uninstall). Then
-      **standardized all interactive shells on login**: alacritty passes
-      `--login` (was a ported accident of the old config); tmux panes were
-      already login-by-default; both fixes remain as armor for stray
-      non-login shells.
-- [x] **vim** *(core slice done 2026-08-19)*: the CoC-era `~/.vimrc`
-      (amix-derived) reviewed line-by-line and ported clean to
-      `programs.vim` in `modules/home/vim/` — settings in vim9script
-      `config.vim`, store paths handed over via `g:deps` (exported as
-      `homeModules.vim`; consumers pass the `vim9-lsp` flake input via
-      home-manager's `extraSpecialArgs`, D11). CoC, its 16 runtime-npm
-      extensions (679 MB in `~/.config/coc`), and the node host dropped;
-      LSP is yegappan/lsp (vim9script, in-process), with `nil` piloting on
-      nix files (`,f` formats through nixfmt via nil's external-formatter
-      hook). Kept: fugitive, gitgutter, surround, nerdtree;
-      onedark swapped for **dracula** 2026-08-20 to match glow's style
-      (`g:dracula_colorterm = 0` keeps the terminal background showing); added fzf.vim (`^P` files, `,b` buffers, `,/`
-      ripgrep). Dropped: nerdcommenter (vim 9.1 ships a native `comment`
-      package if missed), polyglot (dormant since 2022; the 9.1 runtime is
-      fresher), prisma/snippets/emmet fossils, `lazyredraw`, the dead
-      `Ack`/`Bclose` helpers, the hand-rolled statusline (vim-sensible's
-      `laststatus=2` overridden back to 0). **Recovery world:**
-      the HM vim runs `-u <store vimrc>` and removes `~/.vim` from
-      packpath/runtimepath, so the old setup (`~/.vimrc` symlink +
-      `~/.vim/pack` clones) stays intact under `/usr/bin/vim` (plain `vi`
-      resolves to nix vim) until the post-confidence purge; the packpath
-      exclusion is permanent armor against manual installs leaking in.
-      **LSP roster done 2026-08-19** (11 servers, all verified attaching):
-      nil+nixfmt (nix), terraform-ls (`tf`/`terraform` — vim picks either
-      depending on file content), **deno** (TS/JS/TSX — brings its own
-      TypeScript plus deno fmt/lint; requires `initializationOptions.enable`,
-      silent without it), **vtsls** *(added 2026-08-20)* — TypeScript is
-      split by project via the plugin's `runIfSearch`/`runUnlessSearch` on
-      `package.json`: node projects get vtsls (VS Code's own TypeScript
-      service, `autoUseWorkspaceTsdk` so diagnostics match the repo's pinned
-      tsc), everything else stays on deno, and exactly one attaches per
-      buffer. Formatting follows the same split: with a prettier in the
-      repo's node_modules `,f` pipes through it (pinned version, repo
-      `.prettierrc`, and prettier echoes stdin back on ignored paths), and
-      without one it falls to the server — deno fmt for stray TS, itself a
-      reflowing printer. Visual `,f` stays on the server, which does ranges.
-      FormatBuffer now undoes a failed formatprg instead of leaving its
-      stderr in the buffer, since prettier errors on any mid-edit syntax
-      error,
-      yaml-language-server, helm-ls (+`vim-helm` for ft=helm; drives yamlls
-      itself), bash-language-server (shellcheck bundled in the nixpkgs
-      wrapper, shfmt pointed at explicitly), taplo (toml), vscode-json /
-      css / html (`provideFormatter` on), dockerfile-language-server,
-      markdown-oxide (Obsidian-shaped: wikilinks, backlink code lens,
-      daily notes, create-missing-note code action) and harper-ls
-      (offline grammar, also on text/gitcommit) — **opt-in since 2026-08-20**:
-      registered by `,sp`/`:Harper` rather than at startup, and `,qf` becomes
-      `:LspCodeAction 1` in prose because `:LspAutoFix` declines any diagnostic
-      with more than one candidate fix, which is every spelling suggestion. SQL
-      has no server until the postgres slice — `gq` pipes through sqlfluff
-      (postgres dialect, a guess to revisit). Node-based servers ship their
-      own pinned `nodejs-slim`, so none of this touches nvm or project
-      toolchains. Completion: yegappan/lsp's autoComplete pops the menu as you
-      type; omniComplete is enabled too so `<C-x><C-o>` is a manual
-      trigger. Deferred: gopls and rust-analyzer with their toolchains,
-      eslint (needs the node story), tailwind/prisma/emmet dropped.
-      Remaining vim slices: per-buffer LSP maps
-      (`K` currently global) and completion tuning; a deliberate bindings/plugin-usage
-      review and controls overhaul (after everything else settles);
-      upstream yegappan/lsp to nixpkgs once
-      the dust settles (weeks out); a notes/PKM step if the Obsidian-like
-      idea firms up (markdown-oxide is already the editor half; zk is the
-      CLI-notebook alternative, Obsidian itself is packaged); the purge (rm the `~/.vimrc` symlink,
-      archive `~/.vim`, reclaim `~/.config/coc`, retire
-      `~/configs/vimconf`).
-- direnv + nix-direnv **parked 2026-08-18** (was never installed — a proposed
-      addition, not a port; gitleaks/just are global via `home.packages`, so
-      the hook needs nothing). Revisit when a real per-project-toolchain need
-      appears at work (auto-loading devShells per repo).
-- [x] **git** *(config slice done 2026-08-18)*: `~/.gitconfig` reviewed
-      line-by-line against the 2.54 man pages, ported to `programs.git` in
-      `modules/home/git.nix` (exported as `homeModules.git`). Kept: identity
-      (public since commit 1 anyway), untrackedCache / parallel checkout /
-      writeCommitGraph / pack.threads; added: `init.defaultBranch main`,
-      `pull.ff only`, zdiff3, histogram. Dropped: 2.54-default fossils,
-      `gc.auto=10` (near-constant gc), brew-gh credential helpers (SSH-only
-      now). Hook activation now declarative via a `hasconfig:remote.*.url`
-      include (retires D7's manual step). `~/.gitconfig` surrendered to
-      IT/machine-local entries per **D9** — post-switch, trim it to the
-      Aikido `http.sslCAInfo` line; pre-switch, delete `~/.config/git/ignore`
-      (its one Claude-Code-written line moved into `programs.git.ignores`).
-      Deferred: commit signing (own step later — when it lands, also add a
-      signature-required rule to the GitHub ruleset); `git maintenance` skipped
-      (HM support is systemd-only; default gc cadence suffices); rerere
-      skipped (repeated-rebase workflows absent).
-- [x] **GitHub repo hardening** *(2026-08-18, during the git slice)*: default
-      branch renamed `master` → `main` (GitHub redirects old URLs; repo text
-      was already branch-agnostic; on `old`, verify the flake input carries
-      no `?ref=master` before its next update); ruleset
+- [x] **bash + ssh**: `programs.bash` + `programs.readline` in
+      `modules/home/bash/` (prompt in `prompt.bash`, `history -a` for
+      cross-tmux-pane history, HISTSIZE 100k); `programs.ssh` in
+      `modules/home/ssh.nix`, ControlPath hashed to `~/.ssh/cm-%C`.
+      Machine-local escape hatch is `~/.bashrc.local` (**D10**). Own bins are
+      prepended and brew appended, so nix wins the PATH by construction.
+      All interactive shells are login shells; `bashrcExtra` guards
+      `. /etc/bashrc` and tmux sets `set-environment -gr`, as armor for stray
+      non-login shells where `path_helper` demotes the nix directories.
+      Login-shell flip is `environment.shells` in darwin core plus a one-time
+      `chsh` (README). Open: nix's bash-completion framework lazy-loads — if
+      something turns out missing it may want darwin `environment.pathsToLink`.
+- [x] **vim**: `programs.vim` in `modules/home/vim/` — settings in vim9script
+      `config.vim`, store paths handed over through `g:deps`, exported as
+      `homeModules.vim` (consumers pass the `vim9-lsp` input via
+      `extraSpecialArgs`, **D11**). LSP is yegappan/lsp: vim9script,
+      in-process, no node host. Plugins: fugitive, gitgutter, surround,
+      nerdtree, fzf.vim (`^P` files, `,b` buffers, `,/` ripgrep), dracula.
+      **Recovery world:** the HM vim runs `-u <store vimrc>` and drops `~/.vim`
+      from packpath and runtimepath, so `/usr/bin/vim` keeps a working editor
+      independent of it. The packpath exclusion is permanent armor against
+      manually installed plugins leaking in.
+- [x] **LSP roster**: nil + nixfmt (nix), terraform-ls, yaml-language-server,
+      helm-ls (+`vim-helm` for ft=helm, which drives yamlls itself),
+      bash-language-server (shellcheck bundled in the nixpkgs wrapper, shfmt
+      pointed at explicitly), taplo, vscode-json / css / html
+      (`provideFormatter` on), dockerfile-language-server, markdown-oxide
+      (wikilinks, backlink code lens, daily notes), and harper-ls — opt-in via
+      `,sp` / `:Harper` rather than at startup, with `,qf` becoming
+      `:LspCodeAction only:quickfix` in prose because `LspAutoFix` declines
+      any diagnostic carrying more than one candidate, which is every spelling
+      suggestion. TypeScript is split by project with the plugin's
+      `runIfSearch` / `runUnlessSearch` on `package.json`, so exactly one
+      server attaches per buffer: vtsls in node projects
+      (`autoUseWorkspaceTsdk`, so diagnostics match the repo's pinned tsc),
+      deno everywhere else. Formatting follows that split — a prettier in the
+      repo's `node_modules` takes `,f` (its pinned version, its `.prettierrc`,
+      and it echoes stdin back on ignored paths), otherwise the server does it.
+      Visual `,f` stays on the server, which handles ranges. SQL has no server
+      until the postgres slice; `gq` pipes through sqlfluff on the postgres
+      dialect, a guess to revisit. Node-based servers ship their own
+      `nodejs-slim`, independent of any project toolchain.
+      Remaining: per-buffer LSP maps (`K` is global), completion tuning, a
+      deliberate bindings and plugin-usage review once everything else
+      settles, upstreaming yegappan/lsp to nixpkgs, and a notes/PKM step if
+      the idea firms up (markdown-oxide is already the editor half; zk is the
+      CLI alternative). Deferred: gopls and rust-analyzer with their
+      toolchains, eslint.
+- direnv + nix-direnv **parked** — gitleaks and just are global via
+      `home.packages`, so nothing needs a hook. Revisit when a real
+      per-project-toolchain need appears (auto-loading devShells per repo).
+- [x] **git**: `programs.git` in `modules/home/git.nix` (exported as
+      `homeModules.git`). `init.defaultBranch main`, `pull.ff only`, zdiff3,
+      histogram, untrackedCache, parallel checkout, writeCommitGraph; identity
+      in the clear, since the repo is public anyway. Hook activation is
+      declarative through a `hasconfig:remote.*.url` include, which retires
+      D7's manual step. `~/.gitconfig` is surrendered to IT and machine-local
+      entries per **D9** — still to do: trim it to the IT cert line.
+      Deferred: commit signing (when it lands, add a signature-required rule
+      to the GitHub ruleset); `git maintenance` (HM support is systemd-only);
+      rerere (no repeated-rebase workflow).
+- [x] **GitHub repo hardening**: default branch `main`; ruleset
       `protect-default-branch` blocks force-push and deletion, targeting the
-      default branch symbolically; wiki + projects disabled. Confirmed
-      already-good: secret scanning + push protection enabled (GitHub = third
-      seatbelt after hook + CI), Actions `GITHUB_TOKEN` read-only, sole
-      collaborator, no deploy keys or webhooks. Rest of the menu → the
-      PR-guards pass (backlog).
-- [x] **tmux** *(config slice done 2026-08-18)*: `~/configs/tmux/.tmux.conf`
-      reviewed against the 3.6a man page, ported to `programs.tmux` in
-      `modules/home/tmux.nix` (exported as `homeModules.tmux`). Deltas:
-      `default-terminal` xterm-256color → tmux-256color (man requires a
-      screen/tmux derivative; macOS ships the entry); truecolor via
-      `terminal-features ",alacritty:RGB"` (alacritty's terminfo lacks RGB —
-      the old `xterm*` pattern never matched the new outer); focus-events on;
-      brew bash → `bashInteractive`; redundant defaults dropped. Copy-mode
-      `y` should now reach the macOS clipboard via OSC 52 (alacritty `Ms` +
-      `set-clipboard external`) — verify. After switch: delete the
-      `~/.tmux.conf` symlink (found before HM's XDG file) and
-      `tmux kill-server` once. Bindings-quirks review = open offer.
-      Tuning 2026-08-18: prefix → `C-Space` (C-b freed for apps; space-as-
-      shift means the chord lands on space release — rolling breaks it),
-      resize flashes the pane size, five-cell resize tier dropped, `prefix g`
-      renders clipboard markdown in an 80-column glow split, prefix-armed
-      asterisk beside the session tab in status-left, `prefix y` copies the
-      whole scrollback to the macOS clipboard.
-- [x] Alacritty **app** from nixpkgs *(pulled forward 2026-08-18: 0.17.0 via
-      `home.packages` + default copyApps; the manual 0.12.2 in /Applications
-      stays side-by-side until confidence, then gets deleted)*. **Config slice
-      done 2026-08-18**: the pre-TOML `~/.alacritty.yml` reviewed line-by-line
-      against the 0.17 man pages and ported to `programs.alacritty` in
-      `modules/home/alacritty.nix` (exported as `homeModules.alacritty`);
-      Hack provisioned via `hack-font` (HM copies fonts to
-      `~/Library/Fonts/HomeManager`). After confidence, deletable: the old
-      app, `~/.alacritty.yml` + `~/configs/alacritty/`, and the four manual
-      Hack TTFs in `~/Library/Fonts`.
-- [x] Staples from nixpkgs *(2026-08-20)*: **node** `nodejs_22` (LTS, pinned
-      to the major) + `cspell`, in `modules/home/node.nix` — nvm retired per
-      D12, since every `.nvmrc` under `~/code` says v22 and the real per-repo
-      variance is pnpm, handled by packaging `pnpm` itself — the 11.x binary
-      is a launcher that re-execs the version in each repo's `packageManager`
-      and stays 11.x elsewhere. Corepack was tried first and rejected: it
-      ships inside node but installs nothing, and `corepack enable` can only
-      write shims next to the node binary (read-only store) or into a
-      writable dir as store-pinned symlinks that dangle at the next GC.
-      Verified dispatching 9.15.9 / 7.33.7 / 10.10.0 across three repos and
-      11.21.0 outside one. Global
-      prefix redirected via `NPM_CONFIG_PREFIX` (never `~/.npmrc` — npm writes
-      auth tokens there). **k8s bundle** in `modules/home/k8s.nix`: `kubectl`,
-      `kubectx`, `kubernetes-helm`, `k9s`, `argocd`, `argo-rollouts`, `kind`,
-      and `kube-fzf` — kubectl 1.36 vs GKE 1.35 is inside the ±1 skew,
-      replacing gcloud's dispatcher which resolved to 1.27 and warned on every
-      call. `skaffold` dropped as unused. `kube-fzf` is not in nixpkgs, so it
-      is packaged in `packages/kube-fzf.nix` per D14, shaped for a nixpkgs PR
-      once it has run for a while. **gcloud** in
-      `modules/home/gcloud.nix` with `withExtraComponents
-      [gke-gcloud-auth-plugin]`. `gh` grew a config module
-      (`git_protocol = ssh`). `bun` and `go` deliberately skipped — no
-      toolchain need yet. Per-project versions via dev shells/direnv when
-      needed.
-      *(Pulled forward 2026-08-18: `fzf`, `git`, `glow`, `ripgrep`, `tmux`,
-      `jq`, `yq-go`, `htop`, `gh` as packages-only in `modules/home/pkgs.nix` —
-      locked-nixpkgs versions beat the stale brew set on all nine; the brew
-      formulae were uninstalled, so the nix copies are live. Configs still land
-      here in Phase 4. GNU coreutils deliberately deferred to the shell work —
-      unprefixed BSD→GNU userland flip is a decision, not a package add.)*
-- [x] **GNU userland** *(2026-08-20)*: `coreutils`, `findutils`, `gnused`,
-      `gnugrep`, `gawk`, `gnutar`, `diffutils`, `gnumake` unprefixed in
-      `modules/home/gnu.nix` — the BSD→GNU flip this phase had deferred as a
-      decision rather than a package add, taken per **D15** for CI parity.
-      `ls -G` alias corrected to `--color=auto` in the same change.
-- [x] Existing dotfiles migrated per preference order (HM module first;
-      plain-file escape hatch where translation isn't worth it) — **complete
-      2026-08-20**. Every live config is declared: bash/readline, ssh, git,
-      tmux, alacritty, vim, karabiner, glow, gh. `mkOutOfStoreSymlink` was
-      never needed. What remains in `~/configs` is dead files awaiting
-      deletion, not unmigrated config — that is Phase 5 reconciliation, along
-      with the CoC/nvm/brew-gcloud reclaim. The `~/.config/karabiner ->
-      ~/configs/karabiner` symlink (which had activation writing into a public
-      git tree) was replaced with a real directory 2026-08-20; only
-      `~/.vimrc` → `vimconf/.vimrc` stays live, deliberately, for the
-      `/usr/bin/vim` recovery path.
+      default branch symbolically; wiki and projects disabled; secret scanning
+      and push protection on (GitHub is the third seatbelt after hook and CI);
+      Actions `GITHUB_TOKEN` read-only; sole collaborator, no deploy keys or
+      webhooks. Rest of the menu is the PR-guards pass in the backlog. For
+      Phase 6: check `old`'s flake input carries no `?ref=master`.
+- [x] **tmux**: `programs.tmux` in `modules/home/tmux.nix` (exported as
+      `homeModules.tmux`) — `tmux-256color`, truecolor via
+      `terminal-features ",alacritty:RGB"`, focus-events on,
+      `bashInteractive` as the shell. Prefix is `C-Space`, since space-as-
+      shift means the chord lands on space release and rolling `C-b` breaks;
+      resize flashes the pane size; `prefix g` renders clipboard markdown in
+      an 80-column glow split; `prefix y` copies the whole scrollback to the
+      macOS clipboard; a prefix-armed asterisk sits beside the session tab in
+      status-left. Verify: copy-mode `y` reaching the macOS clipboard over
+      OSC 52 (alacritty `Ms` + `set-clipboard external`). Bindings review is
+      an open offer.
+- [x] **Alacritty**: app from nixpkgs through `home.packages`, which HM links
+      into `~/Applications/Home Manager Apps`; config in
+      `modules/home/alacritty.nix` (exported as `homeModules.alacritty`).
+      Hack comes from `hack-font`, which HM copies to
+      `~/Library/Fonts/HomeManager`.
+- [x] **Staples from nixpkgs**: **node** `nodejs_22` pinned to the major, plus
+      `pnpm` — the packaged 11.x is a launcher that re-execs whatever each
+      repo's `packageManager` names and stays 11.x where nothing is pinned,
+      which is where the real per-repo variance lives (**D12**). Corepack was
+      tried and rejected: it installs nothing itself, and `corepack enable`
+      can only write shims beside the node binary (read-only store) or into a
+      writable directory as store-pinned symlinks that dangle at the next GC.
+      Global prefix redirected with `NPM_CONFIG_PREFIX`, never `~/.npmrc` —
+      npm writes registry auth tokens into that file.
+      **k8s bundle** in `modules/home/k8s.nix`: kubectl, kubectx,
+      kubernetes-helm, k9s, argocd, argo-rollouts, kind, kube-fzf. kubectl
+      1.36 against GKE 1.35 is inside the ±1 skew. `kube-fzf` is not in
+      nixpkgs, so it lives in `packages/kube-fzf.nix` per **D14**, shaped for
+      a PR once it has run a while.
+      **gcloud** in `modules/home/gcloud.nix` with
+      `withExtraComponents [gke-gcloud-auth-plugin]`. **gh** carries a config
+      module (`git_protocol = ssh`). `bun` and `go` skipped — no toolchain
+      need yet; per-project versions go through dev shells when one appears.
+- [x] **GNU userland**: `coreutils`, `findutils`, `gnused`, `gnugrep`, `gawk`,
+      `gnutar`, `diffutils` and `gnumake` unprefixed in `modules/home/gnu.nix`
+      per **D15**, with the `ls -G` → `--color=auto` alias correction that the
+      flip requires.
+- [x] Every live config is declared: bash/readline, ssh, git, tmux, alacritty,
+      vim, karabiner, glow, gh. `mkOutOfStoreSymlink` was never needed. One
+      symlink stays live on purpose — `~/.vimrc`, backing the `/usr/bin/vim`
+      recovery path until the Phase 5 purge.
 
 **Gate:** fresh terminal = fully configured bash/vim/tmux ☑; Alacritty from
 Spotlight ☑; `bash --version` ≥ 5 ☑. **Phase 4 complete 2026-08-20.**
@@ -462,19 +375,19 @@ Spotlight ☑; `bash --version` ≥ 5 ☑. **Phase 4 complete 2026-08-20.**
 - [ ] Reconcile Phase 0 inventory: every app/package either declared or consciously
       dropped. Then flip `homebrew.onActivation.cleanup = "zap"`. Carried in
       from Phase 4 as one deletion pass: `~/configs` (all but `vimconf`, which
-      backs the recovery vim), `~/.vim` + `~/.config/coc` (679 MB), `~/.nvm`
-      (2.1 GB), brew's google-cloud-sdk (2.3 GB), the manual Alacritty 0.12.2
-      and hand-installed Hack TTFs, and the dangling `~/git_completion` and
-      `~/.alacritty.yml` symlinks. 🔴 Also the Spacelift key + `ghp_` PAT in
-      `~/configs/bashconf/.bashrc` — rotate before that repo is touched again.
-- [ ] `BOOTSTRAP.md` *(seeded 2026-08-20 with the harness entry)*: the
-      irreducible per-machine manual checklist —
-      WG-installer run · TCC grants (Karabiner) · input source + logout ·
-      `chsh` · 1Password sign-in · browser sign-ins · harness login ·
-      `git config core.hooksPath .githooks` until Phase 4 makes it declarative.
-- [ ] README documents the appliance tier. *(Already done: gitleaks hook
-      verified 2026-08-15 via refusal test; secrets rules documented in
-      README + CLAUDE.md.)*
+      backs the recovery vim), `~/.vim`, `~/.config/coc`, `~/.nvm`, brew's
+      google-cloud-sdk, the manual Alacritty and hand-installed Hack TTFs, and
+      the dangling `~/git_completion` and `~/.alacritty.yml` symlinks — about
+      6 GB together. 🔴 Also the Spacelift key and `ghp_` PAT in
+      `~/configs/bashconf/.bashrc`, which is a public repo: rotate before it
+      is touched again.
+- [ ] Finish `BOOTSTRAP.md`, the irreducible per-machine manual checklist.
+      Written so far: harness install and login, adopting pre-existing casks,
+      Karabiner's driver-extension and Input Monitoring approvals, Slack.
+      Still to add: nix installer run, input source plus logout, `chsh`,
+      1Password sign-in, browser sign-ins.
+- [x] README documents the appliance tier; secrets rules are in README and
+      CLAUDE.md, and the gitleaks hook is verified by refusal test.
 
 **Gate:** zap-mode rebuild changes nothing; checklist tested mentally against a
 hypothetical fresh machine.

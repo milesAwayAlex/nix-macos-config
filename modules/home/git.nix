@@ -32,7 +32,8 @@
       push.autoSetupRemote = true;
       worktree.guessRemote = true;
 
-      # Perf, kept from the old config (verified non-default on 2.54):
+      # Perf. Each verified non-default on 2.54 — the inline notes are what
+      # git would do without the line.
       core.untrackedCache = true; # default "keep"; APFS mtimes are reliable
       checkout.workers = 0; # default 1 (sequential); 0 = all logical cores
       fetch.writeCommitGraph = true; # default false; incremental graph per fetch
