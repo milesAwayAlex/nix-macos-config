@@ -10,7 +10,8 @@
 { pkgs, ... }:
 {
   # Show the input menu at the login window so the layout is selectable there.
-  system.defaults.CustomSystemPreferences."com.apple.loginwindow".showInputMenu = true;
+  system.defaults.CustomSystemPreferences."/Library/Preferences/com.apple.loginwindow".showInputMenu =
+    true;
 
   # Convention: comparison tools are store-pinned (diffutils, locked by the
   # flake); POSIX-universal basics (mkdir/cp/rm/install) ride the activation

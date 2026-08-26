@@ -61,3 +61,10 @@ dns-status:
     else
         echo "   blocking       NOT engaged"
     fi
+
+# the tool is built by modules/darwin/preferences.nix and lands on PATH at
+# switch, so it always checks against the generation that is running. Kept here
+# because `just --list` is where this repo's operations are indexed.
+# read every declared preference back out of its real domain; non-zero on drift
+prefs-status:
+    prefs-status

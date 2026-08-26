@@ -11,7 +11,7 @@ Declarative macOS machine configuration: flake-based nix-darwin + home-manager (
 
 ## Workflow
 
-- `just switch` / `build` / `check` / `update [input]` / `gc`. Host resolved via `NIXHOST` (default `work`). Rebuilds are deliberate events; sudo password prompts are expected — Touch ID for sudo is not wired up yet, and NOPASSWD never will be.
+- `just switch` / `build` / `check` / `update [input]` / `gc`. Host resolved via `NIXHOST` (default `work`). Rebuilds are deliberate events; sudo authenticates by Touch ID (`modules/darwin/pam.nix`), falling back to the password prompt; NOPASSWD never will be.
 - Flakes cannot see untracked files — `git add` new files before any flake command, or the eval fails confusingly.
 - The gitleaks pre-commit hook is versioned in `.githooks/` and activates automatically on HM-configured machines via the `hasconfig` include in `modules/home/git.nix` (D7/D9); on machines without this HM config, activate per clone: `git config core.hooksPath .githooks`.
 
@@ -37,10 +37,14 @@ Declarative macOS machine configuration: flake-based nix-darwin + home-manager (
   an option that exists there. Employer-coupled home modules are imported from
   the same host file for the same reason — `home-manager.users.alexm.imports`
   merges cleanly with the assignment in `flake.nix` (verified).
-- `system.defaults` is write-only. nix-darwin emits one `defaults write` per
-  key at activation and never reads back, so removing a key stops it being
-  written but does not restore the old value, and nothing is enforced between
-  switches. It also does not run `activateSettings` or kill Dock/Finder — those
-  changes need a `killall Dock` or a logout. Anything in
-  `/Library/Managed Preferences/` (MDM) outranks all of it.
+- `system.defaults` is write-only (`modules/darwin/preferences.nix`): one
+  `defaults write` per key at activation, never read back, so removing a key
+  stops the write but leaves the value on the machine, and nothing is enforced
+  between switches — a revert means setting the opposite value. `prefs-status`
+  reads every declared key back and reports drift, and an eval-time assertion
+  checks the module's domain map against the writes nix-darwin actually emits,
+  so a stale map fails `just check` rather than letting the tool go quietly
+  blind. **PREFERENCES.md is the operating manual** — adding keys, removing
+  them, what needs a restart, crossing a nix-darwin version. Read it before
+  touching this module.
 - The personal machine (`old`) consumes `homeModules.karabiner` (and optionally `darwinModules.input`) as a flake input; changes here reach it only via a deliberate `nix flake update nix-macos-config` there.

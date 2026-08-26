@@ -42,11 +42,11 @@
         modules = [
           ./modules/darwin/core.nix
           ./modules/darwin/chrome.nix
-          ./modules/darwin/defaults.nix
           ./modules/darwin/dns.nix
           ./modules/darwin/homebrew.nix
           ./modules/darwin/input
           ./modules/darwin/pam.nix
+          ./modules/darwin/preferences.nix
           ./modules/darwin/redis.nix
           inputs.nix-homebrew.darwinModules.nix-homebrew
           ./hosts/work.nix
@@ -82,11 +82,11 @@
       homeModules.vim = ./modules/home/vim;
       homeModules.work = ./modules/home/work.nix;
       darwinModules.chrome = ./modules/darwin/chrome.nix;
-      darwinModules.defaults = ./modules/darwin/defaults.nix;
       darwinModules.dns = ./modules/darwin/dns.nix;
       darwinModules.homebrew = ./modules/darwin/homebrew.nix;
       darwinModules.input = ./modules/darwin/input;
       darwinModules.pam = ./modules/darwin/pam.nix;
+      darwinModules.preferences = ./modules/darwin/preferences.nix;
       darwinModules.redis = ./modules/darwin/redis.nix;
 
       # Packages this repo maintains itself because nixpkgs has none (D14).

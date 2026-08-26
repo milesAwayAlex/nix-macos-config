@@ -393,6 +393,16 @@ Spotlight ☑; `bash --version` ≥ 5 ☑. **Phase 4 complete 2026-08-20.**
       there was no file to adopt. `sufficient`/`optional` mean no state of the
       stack can lock sudo out. Fingerprint enrollment is manual (BOOTSTRAP).
       No MDM profile restricts biometrics on this machine.
+- [x] macOS preferences declared, `modules/darwin/preferences.nix`
+      *(2026-08-25)*: 46 `system.defaults` keys plus the startup chime, chosen
+      from a full read of this machine merged with the `old` machine's existing
+      `system` block. Small on purpose — of the 197 keys nix-darwin can type,
+      only the ones that are a considered choice are declared. The rest are
+      values macOS and System Settings write into their own domains, and the
+      trackpad gesture block is the clearest case: most of what reads as a
+      deviation there is stock for this hardware. `just prefs-status` reads the
+      declared set back out of its real domains, because these writes are
+      one-way and a clean switch only proves they ran.
 - [ ] Finish `BOOTSTRAP.md`, the irreducible per-machine manual checklist.
       Written so far: harness install and login, adopting pre-existing casks,
       Karabiner's driver-extension and Input Monitoring approvals, fingerprint
@@ -422,7 +432,7 @@ hypothetical fresh machine.
 
 **Gate:** old laptop reaches declared state using only the repo + BOOTSTRAP.md.
 
-## Phase 7 — Local resolver stack ☐
+## Phase 7 — Local resolver stack — **complete 2026-08-25** ☑
 
 Runs independently of Phases 5 and 6; `old` takes the same module. Source
 material was a NixOS `services.blocky` + `services.unbound` pair
@@ -466,17 +476,19 @@ Rationale and the rejected alternatives are in D21.
       or much else — it accepted `blockType: notAThing` and a
       `clientGroupsBlock` naming a list that does not exist, and
       `log.level: warn` suppresses even its success line.
-- [ ] captive-browser for portals: in nixpkgs for `aarch64-darwin`, 2021
-      vintage, with no nix-darwin or HM option, so the TOML is ours.
+- [x] **Dropped** *(2026-08-25)*: captive-browser. `just dns-dhcp` already
+      hands DNS back for a portal and is one command, so a second browser with
+      its own TOML earns nothing. If it is ever revisited, the trick was
       `dhcp-dns = "ipconfig getoption en0 domain_name_server"` — verified to
-      return the DHCP resolver even while the tunnel owns the system one, which
-      is the whole trick. Open risk is `bind-device`: Linux's
-      `SO_BINDTODEVICE` has no macOS equivalent, so that line may have to go.
-      macOS's own `Captive Network Assistant.app` remains the fallback.
-- [ ] Upstream `ports.reuseAddr` to blocky, modelled on the merged IP_FREEBIND
-      PR (#2078), which already built the `ActivateAndServe` path this needs.
-      No issue exists for it. Not blocking — dnsmasq covers it, and nixpkgs
-      pins 0.29.0 against upstream v0.34.0 anyway.
+      return the DHCP resolver even while the tunnel owns the system one — and
+      the open risk was `bind-device`, which has no macOS equivalent to
+      `SO_BINDTODEVICE`. macOS's own `Captive Network Assistant.app` is the
+      fallback either way.
+- [x] **Dropped** *(2026-08-25)*: upstreaming `ports.reuseAddr` to blocky. The
+      dnsmasq front costs one daemon and removes the need. The shape, if it
+      comes back: model it on the merged IP_FREEBIND PR (#2078), which already
+      built the `ActivateAndServe` path it needs. No issue exists for it, and
+      nixpkgs pins 0.29.0 against upstream v0.34.0 anyway.
 
 **Gate:** an ad domain NXDOMAINs off-tunnel; on-tunnel resolution is unchanged;
 `.local` and Bonjour still work; DNS survives a blocky restart.
