@@ -493,6 +493,188 @@ Rationale and the rejected alternatives are in D21.
 **Gate:** an ad domain NXDOMAINs off-tunnel; on-tunnel resolution is unchanged;
 `.local` and Bonjour still work; DNS survives a blocky restart.
 
+## Phase 8 — Local Linux VM: builder, cluster, containers ☐
+
+One lima VM running a NixOS guest declared in this repo, filling three roles at
+once: the `aarch64-linux` remote builder, a k3s cluster, and the container
+runtime behind a docker-compatible CLI. The alternative — colima for the
+containers plus `nix.linux-builder` for the building — was rejected
+*(2026-08-30)*: it leaves an opaque, imperatively provisioned guest on a machine
+whose premise is that nothing is opaque, needs two VMs for the two roles, and
+does not avoid the key problem below, only postpones it. Its one honest use is
+as documentation — `colima start` once, read the lima YAML it generates for a
+config proven on this hardware, then delete it.
+
+Ownership splits cleanly. lima owns the **outer shape** — vmType, cpus, memory,
+disks, mounts, forwarded ports — in a YAML the instance copies at creation and
+which mostly re-applies on restart. This repo owns the **inner OS** outright,
+rebuilt with `nixos-rebuild` any time. Keep the outer shape boring so it rarely
+needs recreating.
+
+- [ ] **Roles, so the guest can be less than all of it** *(2026-08-30)*.
+      `devvm.builder`, `devvm.containers` and `devvm.cluster` as separate
+      enables, because the three need not travel together — `old` may want only
+      the builder. The consequence to design around is that containerd's socket
+      becomes a computed value: with the cluster on it is k3s's, at
+      `/run/k3s/containerd/containerd.sock` in namespace `k8s.io`; with
+      containers alone it is `virtualisation.containerd`'s, at
+      `/run/containerd/containerd.sock` in `default`. Either way the guest
+      writes `/etc/nerdctl/nerdctl.toml`, so no command ever needs the flags.
+      The guest is a flake output, which is what makes `nixos-rebuild` work
+      from inside it: two role sets, `devvm` with everything and
+      `devvm-builder`, exported as `nixosConfigurations` and independent of
+      any Mac. A Mac names the one it runs in its host file, beside sizing and
+      the shared directory, and the darwin module reads the roles from it.
+- [ ] **Outer shape.** `vmType: vz` for Apple Virtualization. Guest state — k3s,
+      containerd, and `/etc/ssh` — on a lima
+      `disks:` volume, so the OS disk stays disposable and recreation costs a
+      rebuild rather than a bootstrap. Sizing is per host: on `work` (M1 Max, 8P + 2E,
+      32 GB) 6 vCPU and 8 GB while Docker Desktop's own 8 GB VM still runs
+      beside it, ~12 GB once it is gone; `old` is smaller. Whatever launchd job starts the VM must not be
+      `ProcessType = "Background"` — that confines a job to the efficiency
+      cores and throttles its I/O. `Standard` is right; `Interactive` would
+      fight the desktop for performance cores. nix-darwin's own linux-builder
+      daemon sets none of these and inherits `Standard`.
+- [ ] **Narrow mount.** `~/code-shared`, mounted at the identical path,
+      `writable: true`. Bind mounts are resolved by the *daemon*, in the
+      guest's filesystem, so `-v $PWD:/app` works only when the path matches on
+      both sides — that identity is what Docker Desktop, colima and OrbStack
+      all buy by sharing `/Users` wholesale, and a path the guest lacks mounts
+      as an empty directory rather than erroring. Sharing one directory keeps
+      `~/.ssh`, cloud credentials and 1Password state out of a VM that also
+      runs third-party images. lima defaults help here: `mounts` is empty and
+      `writable` is false, so exposure is opt-in. A builder-only guest needs no
+      mount whatever — nix copies sources into the store over SSH — so this is
+      a property of the containers role, not of the VM. `mountInotify` is
+      EXPERIMENTAL and off, so file-watching may need polling
+      (`CHOKIDAR_USEPOLLING`, `--poll`); Docker Desktop's virtiofs does
+      propagate events, and this is the one ergonomic regression against it.
+- [ ] **One containerd — no dockerd, no registry.** k3s already embeds
+      containerd, so point `nerdctl` at `/run/k3s/containerd/containerd.sock`
+      and namespace `k8s.io` and an image built locally *is* the image the
+      cluster runs: one daemon, one content store, no push/pull and no
+      `ctr import` step. `services.k3s.docker` no longer exists — the module
+      hard-removes it — so routing the cluster at dockerd would mean
+      hand-rolling cri-dockerd. Fallback if a work compose file genuinely needs
+      dockerd: run it alongside and bridge with a local registry, accepting
+      three copies of every image. Not the starting point. Two consequences of
+      the shared namespace, both real: `nerdctl ps` lists every pod sandbox in
+      the cluster next to your own containers, and `nerdctl system prune` in
+      `k8s.io` is pointed at the cluster's images. The kubelet is a garbage
+      collector on that same store — above `imageGCHighThresholdPercent` (85
+      by default) it frees images it considers unused, and it counts only
+      CRI-managed containers as users, so an image you built but no pod is
+      running is eligible. Raise the threshold through `--kubelet-arg` rather
+      than meet this at 85% full.
+- [ ] **Packaged components: keep metrics-server, drop traefik**
+      *(2026-08-30)*. k3s ships traefik, servicelb, metrics-server and
+      local-path-provisioner. metrics-server earns its place — it fills k9s's
+      CPU and memory columns and makes `kubectl top` answer — and
+      local-path-provisioner supplies the default StorageClass, so PVCs bind
+      instead of hanging. traefik goes in `services.k3s.disable`: it exists to
+      serve Ingress, and serving it means a LoadBalancer service that
+      klipper-lb satisfies by binding 80 and 443 on the node, which lima then
+      forwards to the Mac's localhost for as long as the VM is up. Worth having
+      only if the work repos deploy Ingress manifests worth exercising locally;
+      until then it is two contended ports and another pod. servicelb stays —
+      with no LoadBalancer service it creates nothing, so keeping it makes
+      turning traefik back on a one-word change. The failure without it is loud
+      (an Ingress simply does nothing), the same test the emulation bullet uses.
+- [ ] **Visibility.** Four questions, four tools, not interchangeable: is the VM
+      up (`limactl list`), is the builder usable
+      (`nix store ping --store ssh-ng://devvm`), what workloads are running
+      (`k9s`, already installed by `modules/home/k8s.nix`), and what is really
+      in the content store (`nerdctl images`; `crictl` for the kubelet's own
+      view). k9s renders Pod objects, so a `nerdctl run` or `nerdctl compose`
+      container never appears in it however much it shares the daemon —
+      `nerdctl ps` sees both populations, k9s sees one. The kubeconfig arrives
+      by lima's `copyToHost`, from a copy the guest publishes under its own
+      hostname (k3s names everything `default`, which collides on merge) into
+      the instance directory with `deleteOnStop: true`, so a stopped VM fails
+      fast instead of hanging on a dead 6443; it needs a `probes:` block to
+      wait, because the file does not exist until k3s has started. The Mac
+      sets `KUBECONFIG` to `~/.kube/config` and that copy, in that order, so
+      kubectx sees the context beside the others and nothing is ever merged
+      into the Mac's own file. On the host,
+      `nerdctl` is not a native client — nixpkgs builds it for Linux only, and
+      lima's wrapper is `limactl shell --preserve-env <instance> nerdctl`, so
+      every command runs in the guest and path identity is what makes it feel
+      local. Then `just devvm-status`, layered like `dns-status` and
+      `prefs-status`.
+- [ ] **Emulation stays off until something needs it** *(2026-08-30)*. The only
+      thing it buys here is running x86_64 *Linux* binaries in the guest —
+      amd64-only images, and `--platform linux/amd64` builds — and the failure
+      is loud and immediate (`exec format error`), so there is nothing to
+      detect early. Note this is not Rosetta 2 for Mac apps, which is a
+      separate feature that happens to already be installed on `work`. The
+      likely trigger is an employer image whose CI only publishes amd64;
+      building the same thing from source locally produces arm64 and never
+      hits it. Ladder when it does: an arm64 variant or a source build first;
+      then `boot.binfmt.emulatedSystems = [ "x86_64-linux" ]`, one line,
+      portable, slow, and with `addEmulatedSystemsToNixSandbox` it also lets
+      the builder claim `x86_64-linux` derivations; then
+      `virtualisation.rosetta.enable` plus lima's `rosetta.enabled`, two lines,
+      fast, Apple-only, and aimed at running workloads rather than at being a
+      build platform.
+- [ ] **Builder keys — per machine, never in the repo or the store.**
+      `nix.linux-builder` cannot be adopted as-is. nixpkgs commits the guest's
+      *host private key* (`./keys/ssh_host_ed25519_key`), so every builder on
+      earth shares one identity; and `run-builder` runs `nix-store --add` over
+      the whole key directory, which lands the *client private key* in the
+      world-readable store with permissions canonicalised to 444. Both are
+      against principle 5. Instead: generate `/etc/nix/devvm_ed25519` at
+      activation when absent (0600, root); let the guest generate its own host
+      key on first boot and keep it on the data disk, so the identity survives
+      every rebuild; have the Mac learn it once by `ssh-keyscan`, written to
+      `/etc/nix/known_hosts` only when the entry is missing. That leaves one
+      trust-on-first-use moment, seconds after we created the VM, on a loopback
+      port lima has already bound — narrow, and once per machine rather than
+      once per VM. Optional closure: compare the scanned key against
+      `limactl shell devvm cat /etc/ssh/ssh_host_ed25519_key.pub`, two
+      independent paths to the same value.
+- [ ] **Registration.** An `/etc/ssh/ssh_config.d/` alias carrying port, user,
+      `IdentityFile` and `UserKnownHostsFile` — system-wide, because the nix
+      *daemon* running as host root is the ssh client, not you, and nothing in
+      `~/.ssh` is visible to it. `HostKeyAlias`, because `known_hosts` is keyed
+      on host:port and every VM ever run lives somewhere on localhost. Then
+      `nix.distributedBuilds = true` — it defaults false and `buildMachines` is
+      silently ignored without it, with only a warning — and
+      `nix.settings.builders-use-substitutes = true`, so the builder fetches
+      dependencies from the cache instead of the Mac pushing them through the
+      SSH pipe. Guest side: `builder` in `nix.settings.trusted-users`, not
+      root.
+- [ ] **Bootstrap: seed image, then rebuild** *(2026-08-30)*. nixos-lima
+      publishes digest-pinned qcow2 release assets, so `limactl start` boots a
+      working NixOS guest with no Linux builder on the host at all; that guest
+      then runs `nixos-rebuild switch --flake .#devvm` and becomes ours. This
+      retires the temporary `nix.linux-builder` the earlier plan accepted, and
+      with it the bounded store-key exposure — no step in Phase 8 now puts a
+      private key in the store. Take `nixosModules.lima` as a flake input: it
+      is the lima guest protocol, a moving target already carrying shims for
+      lima 2.1.0 and 2.1.3, and a pure module that never evaluates its own
+      nixpkgs. Declare the disk layout here instead of inheriting it — `/boot`
+      on `/dev/vda1`, `/` by label `nixos` with `autoResize` — because it
+      describes the image we booted and the first rebuild has to agree with it.
+      `users.mutableUsers = true` is mandatory: lima creates its user
+      imperatively, and a rebuild without it deletes that user and the SSH
+      access with it. Their template also ignores UDP 68, a NixOS-only bug
+      where the guest agent intercepts host DHCP. One nixpkgs covers both
+      sides — k3s, containerd, nerdctl, buildkit, cri-tools, systemd and the
+      kernel all resolve to cached `aarch64-linux` builds at the pinned
+      darwin-channel rev, checked 2026-08-30 — so no second input and no
+      change to D6. `vmType: vz` is unverified by us but not novel: their
+      template names no vmType, and lima 2.x defaults to vz on Apple Silicon,
+      so their seed already boots under vz for anyone following their README.
+- [ ] **Abort condition.** If a NixOS guest is not booting under lima within a
+      bounded effort, fall back to colima plus a separate `nix.linux-builder`
+      and revisit. Written down now so the fallback is a decision already made
+      rather than one made while frustrated.
+
+**Gate:** `nix build --system aarch64-linux` succeeds from the Mac with no
+manual key step; `nerdctl compose up` runs a work repo out of `~/code-shared`;
+`k9s` reaches the cluster; an image built locally runs in it without a push; all
+of it survives a reboot.
+
 
 ---
 
@@ -508,16 +690,31 @@ Rationale and the rejected alternatives are in D21.
   `sha_pinning_required` toggle), Dependabot version updates for the
   `github-actions` ecosystem (it can't track flake.lock), required status
   checks once the eval check exists, `deleteBranchOnMerge`.
-- `nix.linux-builder` (sized: ~4 cores / 6 GB on small machines; launchd
-  `ProcessType = "Interactive"`; aarch64-linux only — no x86 via QEMU).
-- colima (`--vm-type vz`) + docker CLI + k3d/kind for containers/k8s.
 - Postgres from nixpkgs — the "postgres slice" the sqlfluff bullet in Phase 4
   defers to, which also settles that linter's dialect and whether a SQL
   language server is worth having. `Postgres.app` is a manual install with no
   brew receipt, so it is invisible to brew cleanup and survives regardless.
   Redis took this route already (`modules/darwin/redis.nix`).
-- NixOS VMs: nixos-lima (headless), vfkit/phaer setup (GUI 2D), UTM+virgl (GUI 3D);
+- Case-sensitive APFS volume for code, for Linux parity and a tighter mount
+  boundary — `diskutil apfs addVolume disk3 "Case-sensitive APFS" Code`, which
+  costs nothing until used and has precedent on `work` in the Nix Store volume.
+  Deferred *(2026-08-30)*: Phase 8 shares `~/code-shared` instead, which gets
+  the isolation without moving any repo. The case-sensitivity win is separate —
+  it makes `COPY ./Foo` fail locally instead of in CI. Watch for latent case
+  collisions in existing repos, absolute paths in editor and direnv config, and
+  whether Time Machine picks the volume up; and mount the real path, since a
+  `~/code` symlink leaves `$PWD` logical and bind mounts resolve empty.
+- NixOS VMs beyond Phase 8's: vfkit/phaer setup (GUI 2D), UTM+virgl (GUI 3D);
   NixOS test framework for multi-node network labs.
+- Dev VM autostart on `work` *(2026-09-01)*: a `launchd.agents` entry running
+  `limactl start --foreground devvm`, so the VM lives exactly as long as the
+  job and `KeepAlive` brings a crashed hostagent back. A user agent, not a
+  daemon: `~/.lima` and the hostagent are per-user. `ProcessType = "Standard"`
+  per the Phase 8 note. lima's own `limactl start-at-login` does the same job
+  imperatively by writing a plist into `~/Library/LaunchAgents` — the
+  declarative version replaces it, and must not coexist with it. Not before the
+  VM has proven itself under manual start, and not while Rancher Desktop can
+  still start on the same machine: both clusters forward 6443 to localhost.
 - sops-nix (age keys held in 1Password) when first server/VM needs deploy secrets;
   colmena `keyCommand` with `op`/`rbw` for push-time injection.
 - Lix experiment: `nix.package = pkgs.lixPackageSets.stable.lix` (+ overlay).

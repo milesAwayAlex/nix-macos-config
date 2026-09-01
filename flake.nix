@@ -17,6 +17,18 @@
     # to follow, only a pin of Homebrew/brew itself.
     nix-homebrew.url = "github:zhaofengli/nix-homebrew";
 
+    # The lima guest protocol — user creation, the cidata mounts, the guest
+    # agent — as a NixOS module. Tracks lima's guest contract, which moves on
+    # lima's schedule and not on the release train's, so it is pinned on its
+    # own. Only `nixosModules.lima` is used, a pure module, so this input's own
+    # nixpkgs is never evaluated.
+    nixos-lima = {
+      url = "github:nixos-lima/nixos-lima";
+      # Only the module is used and it takes `pkgs` from us, so following keeps
+      # a second nixpkgs out of the lock rather than changing what is built.
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # yegappan/lsp, deliberately out-of-nixpkgs (D11). Pinned by flake.lock,
     # independent of the release train; bump via `just update vim9-lsp`.
     vim9-lsp = {
@@ -39,9 +51,12 @@
     in
     {
       darwinConfigurations.work = nix-darwin.lib.darwinSystem {
+        # `self` so a host can name the guest it runs (`devvm.guest`).
+        specialArgs = { inherit self; };
         modules = [
           ./modules/darwin/core.nix
           ./modules/darwin/chrome.nix
+          ./modules/darwin/devvm.nix
           ./modules/darwin/dns.nix
           ./modules/darwin/homebrew.nix
           ./modules/darwin/input
@@ -64,6 +79,34 @@
         ];
       };
 
+      # The development VM's guest OS (Phase 8, D22): a product, independent of
+      # any Mac. Two role sets, and a Mac names the one it runs in `devvm.guest`.
+      # The hostname is the attribute, which is how `nixos-rebuild --flake .`
+      # finds the right one from the guest it is aimed at.
+      nixosConfigurations =
+        builtins.mapAttrs
+          (
+            name: roles:
+            nixpkgs.lib.nixosSystem {
+              modules = [
+                inputs.nixos-lima.nixosModules.lima
+                ./modules/nixos/devvm
+                {
+                  nixpkgs.hostPlatform = "aarch64-linux";
+                  networking.hostName = name;
+                  devvm = roles;
+                }
+              ];
+            }
+          )
+          {
+            devvm = {
+              containers.enable = true;
+              cluster.enable = true;
+            };
+            devvm-builder = { };
+          };
+
       # Portable modules, exported so other flakes (the `old` machine,
       # pre-Phase-6) can consume them as an input.
       homeModules.alacritty = ./modules/home/alacritty.nix;
@@ -81,7 +124,9 @@
       homeModules.tmux = ./modules/home/tmux.nix;
       homeModules.vim = ./modules/home/vim;
       homeModules.work = ./modules/home/work.nix;
+      nixosModules.devvm = ./modules/nixos/devvm;
       darwinModules.chrome = ./modules/darwin/chrome.nix;
+      darwinModules.devvm = ./modules/darwin/devvm.nix;
       darwinModules.dns = ./modules/darwin/dns.nix;
       darwinModules.homebrew = ./modules/darwin/homebrew.nix;
       darwinModules.input = ./modules/darwin/input;

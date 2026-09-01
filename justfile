@@ -68,3 +68,49 @@ dns-status:
 # read every declared preference back out of its real domain; non-zero on drift
 prefs-status:
     prefs-status
+
+# ── dev VM: builder, cluster, containers (PLAN.md Phase 8) ───────────────────
+
+# create the state disk and the VM from the configuration, and start it. A new
+# instance boots the seed image, not this configuration: the first rebuild and
+# the key exchange follow (DEVVM.md, "Bootstrap")
+devvm-up:
+    devvm-up
+
+# stop the VM. State survives; the kubeconfig is deleted on stop by design,
+# so kubectl fails fast instead of hanging on a dead 6443.
+devvm-down:
+    limactl stop devvm
+
+# layered view: instance, builder, cluster, containerd
+devvm-status:
+    devvm-status
+
+# push the host's public key in and pin the guest's host key. Once per state
+# disk, after the first rebuild has put that disk in place. Idempotent, and the
+# one step that cannot be declarative: neither key exists at build time.
+devvm-adopt:
+    sudo /run/current-system/sw/bin/devvm-adopt
+
+# a shell in the guest, keeping the working directory
+devvm-shell *args:
+    limactl shell devvm {{ args }}
+
+# rebuild the guest from this checkout: the Mac evaluates, the guest builds and
+# activates its own system, reached over lima's ssh identity as lima's user
+# (wheel, passwordless sudo). The `builder` account is a normal user by design
+# and cannot activate; the builder role is not involved at all. No attribute:
+# nixos-rebuild asks the guest for its hostname, which is the attribute it
+# runs. Changing role sets names the new one once: `just devvm-rebuild .#devvm-builder`
+devvm-rebuild flake=".":
+    NIX_SSHOPTS="-F $HOME/.lima/devvm/ssh.config" nixos-rebuild switch --flake {{ flake }} --build-host lima-devvm --target-host lima-devvm --sudo
+
+# prove the builder end to end with a derivation that cannot be substituted
+devvm-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    sudo nix store info --store ssh-ng://devvm
+    out=$(nix build --no-link --print-out-paths --impure --expr \
+        'let p = (builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.aarch64-linux;
+         in p.runCommand "devvm-probe" { } "uname -srm > $out"')
+    echo "built on: $(cat "$out")"

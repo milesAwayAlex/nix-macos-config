@@ -6,7 +6,8 @@ roadmap lives in [PLAN.md](PLAN.md); operating conventions in
 [DECISIONS.md](DECISIONS.md); the steps a fresh machine needs that the flake
 cannot do for itself in [BOOTSTRAP.md](BOOTSTRAP.md); the Karabiner chord
 cheatsheet in [KEYBOARD.md](KEYBOARD.md); the manual for adding, removing and
-verifying macOS preferences in [PREFERENCES.md](PREFERENCES.md).
+verifying macOS preferences in [PREFERENCES.md](PREFERENCES.md); the dev VM's
+bootstrap and operation in [DEVVM.md](DEVVM.md).
 
 ## Seed record
 

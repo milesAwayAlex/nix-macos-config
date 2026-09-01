@@ -670,3 +670,134 @@ pre-created with a `net.ListenConfig{Control}` hook and served through
 `ActivateAndServe`. Gating matters rather than being merely polite — on Linux
 `SO_REUSEADDR` *does* permit two sockets on the identical UDP address:port,
 which is why `SO_REUSEPORT` acquired a UID check.
+
+## D22 — The dev VM: lima owns the shape, this repo owns the OS, the machine owns the keys *(2026-08-30)*
+
+**Decision.** The development VM is a lima instance whose guest is a NixOS
+system declared here under `nixosConfigurations`. lima's remit stops at the
+outer shape — vmType, cpus, memory, disks, mounts, forwarded ports, the seed
+image — expressed in a template this repo generates at
+`/etc/devvm/lima.yaml`. Everything from the bootloader up is
+`modules/nixos/devvm`, moved by `nixos-rebuild`. The guest is a product: the
+flake exports two role sets, `devvm` with everything and `devvm-builder`,
+independent of any Mac and rebuilt from inside. A Mac names the one it runs in
+`devvm.guest`, declares what only it knows — sizing, disks, the port, the
+shared directory, its own shims — and reads everything that has to agree with
+the guest from that configuration: the roles to serve, the builder account, the
+state disk's name, where the kubeconfig appears. The guest's hostname is its
+attribute, so `nixos-rebuild --flake .` aimed at the guest finds it without
+being told.
+
+**Why a guest config and not a provisioned image.** The premise of the repo is
+that nothing on the machine is opaque, and a VM provisioned by shell scripts at
+first boot is the largest opaque thing that could be added to it. Declaring the
+guest costs one flake output and buys the same rebuild-and-diff loop the host
+already has. It also makes the roles separable, which is the point below.
+
+**Three roles, separately enabled.** `devvm.builder`, `devvm.containers`,
+`devvm.cluster`. They do not have to travel together: a machine that wants only
+an `aarch64-linux` builder picks `devvm-builder`, gets sshd and nothing else,
+and in particular gets no host mount at all — nix ships sources into the store over ssh, so a
+builder-only guest sees none of the host filesystem. Sharing a directory is a
+property of the containers role, not of the VM.
+
+**Keys are per-machine local state, never in the repo and never in the store.**
+`nix.linux-builder` cannot be adopted as-is: nixpkgs commits the guest's *host
+private key*, so every builder on earth shares one identity, and `run-builder`
+runs `nix-store --add` over the whole key directory, landing the *client
+private key* in the world-readable store with permissions canonicalised to 444.
+Both are against principle 5. Instead the host generates
+`/etc/nix/devvm_ed25519` at activation when absent (0600, root — the nix
+*daemon* is the ssh client, so nothing in `~/.ssh` is visible to it), the guest
+generates its own host key on first boot onto the state disk, and
+`devvm-adopt` exchanges the two public halves. That is the one step that cannot
+be declarative, and it is idempotent.
+
+**Which is why the pin is `known_hosts` and not `publicHostKey`.** Upstream can
+name the guest's public host key in `nix.buildMachines` at build time precisely
+*because* it ships one committed identity for every builder. A guest that makes
+its own cannot be pinned at build time, so `/etc/nix/devvm_known_hosts` carries
+the pin, keyed on a `HostKeyAlias` — `known_hosts` is otherwise keyed on
+host:port, and every VM ever run on this machine lives somewhere on localhost.
+`StrictHostKeyChecking yes` makes an unknown key a failure rather than a prompt
+no daemon can answer.
+
+**Bootstrap is a seed, not a build.** nixos-lima publishes digest-pinned qcow2
+release assets, so the first instance boots with no Linux builder on the host at
+all and the first `nixos-rebuild` inside it replaces the whole system. The
+digest in `modules/darwin/devvm.nix` is provenance for that seed (D5) and does
+*not* move when the flake input is bumped; it is read once, at instance
+creation.
+
+**The cluster reaches kubectl through `KUBECONFIG`, never through
+`~/.kube/config`.** lima copies the guest's kubeconfig out while the VM runs and
+deletes it on stop; the Mac sets `KUBECONFIG` to its own file first and that
+copy second, and kubectl, k9s and kubectx merge the list. Merging the file *into*
+`~/.kube/config` was rejected: k3s names everything `default`, so a merge
+collides, and an entry that outlives the VM hangs on a dead port where a missing
+file fails at once. The guest therefore publishes the file under its own
+hostname, which is also the context's name.
+
+**Two consequences worth knowing before touching the guest.**
+`users.mutableUsers = true` is mandatory, not stylistic: lima creates its user
+imperatively on every boot, and a rebuild without it deletes that user and the
+`limactl shell` access along with it. And `services.openssh.authorizedKeysFiles`
+must be *added to*, never replaced — the module's own
+`/etc/ssh/authorized_keys.d/%u` is where lima writes its user's key.
+
+**Revisit when.** A machine wants a role set neither output has — a third line
+in the flake, and the question of whether the sets should be composed there
+rather than enumerated. Or nix-darwin's linux-builder stops putting a private
+key in the store, at which point the plumbing here is worth re-comparing
+against it.
+
+## D23 — One containerd, one content store: no dockerd, no registry *(2026-08-30)*
+
+**Decision.** k3s already embeds containerd, so with the cluster enabled there
+is exactly one daemon, and `nerdctl`, `buildkit` and `crictl` are all pointed at
+`/run/k3s/containerd/containerd.sock` in namespace `k8s.io` through a generated
+`/etc/nerdctl/nerdctl.toml` and `/etc/crictl.yaml`. An image built locally *is*
+the image the cluster runs: no push, no pull, no `ctr import`. `docker` and
+`docker-compose` are wrappers onto nerdctl. Without the cluster the same wiring
+points at `virtualisation.containerd`'s own socket in namespace `default`, so
+the socket and namespace are computed values and never literals.
+
+**Why not dockerd.** `services.k3s.docker` no longer exists — the module
+hard-removes the option — so routing the cluster at dockerd would mean
+hand-rolling cri-dockerd. Running dockerd *alongside* k3s and bridging them
+with a local registry works, and costs three copies of every image plus a
+push/pull cycle in the inner loop. It is the fallback if a work compose file
+genuinely cannot be made to work, not the starting point.
+
+**The costs of sharing the namespace, accepted deliberately.** `nerdctl ps`
+lists every pod sandbox in the cluster next to your own containers — roughly two
+entries per pod. `nerdctl system prune` in `k8s.io` is aimed at the cluster's
+images, not at your leftovers, which is the one place Docker Desktop muscle
+memory is actively wrong. And the kubelet is a garbage collector on the same
+store: above `imageGCHighThresholdPercent` it frees images it considers unused,
+counting only CRI-managed containers as users, so an image built here that no
+pod happens to be running is eligible. The thresholds are therefore raised to
+95/90 via `--kubelet-arg` rather than left at 85/80.
+
+**The Mac-side wrappers fail loudly rather than guess.** `nerdctl`, `docker`
+and `docker-compose` on the Mac are `limactl shell` wrappers, and two things
+about that are unsafe by default. lima's rule for the working directory is
+`cd $PWD || cd ~`, so a build started outside the shared directory would
+quietly run against the guest user's home; the wrappers pass `--workdir`, the
+real path under the mount and an empty immutable directory anywhere else, so a
+relative path fails and a daemon query works from wherever you are. And the
+wrappers sit ahead of `/usr/local/bin` on PATH, where a manual Docker install
+leaves its CLI, which eval cannot see; so a wrapper refuses to run over another
+binary of its name rather than take it over, and `devvm.dockerShims` is the way
+to yield. In the guest, nerdctl is rootful and every call goes through `sudo -E`,
+which is why the forwarded environment survives.
+
+**Why buildkit needs its own unit.** `nerdctl build` needs buildkit, nixpkgs has
+no module for it, and it has to be given both the socket *and* the namespace —
+`--containerd-worker-addr` and `--containerd-worker-namespace` — or a built
+image lands somewhere the cluster cannot see, which is the whole property being
+bought.
+
+**Revisit when.** A work repo needs something nerdctl cannot do, or the
+cluster's images and the development images want different lifetimes — then the
+registry fallback earns its three copies.

@@ -47,4 +47,21 @@ Declarative macOS machine configuration: flake-based nix-darwin + home-manager (
   blind. **PREFERENCES.md is the operating manual** — adding keys, removing
   them, what needs a restart, crossing a nix-darwin version. Read it before
   touching this module.
+- The dev VM (D22/D23) is a lima instance, `devvm`, whose guest is one of two
+  role sets the flake exports as `nixosConfigurations` — `devvm` (builder,
+  containers, cluster) and `devvm-builder`. A Mac names the one it runs in
+  `devvm.guest` in its host file and declares sizing, the shared directory and
+  its shims beside it; the darwin module reads everything else from the guest.
+  **DEVVM.md is the operating manual** — bootstrap order, day-to-day recipes,
+  what each kind of change costs; read it before touching either half. Three
+  things bite: `users.mutableUsers = true` in the
+  guest is **mandatory** (lima creates its user imperatively; a rebuild without
+  it deletes that user and your `limactl shell` access),
+  `services.openssh.authorizedKeysFiles` must be added to rather than replaced
+  (the default entry is where lima writes its own key), and `just devvm-adopt`
+  is the one non-declarative step — it exchanges the two public keys that only
+  exist at runtime, and only after the first rebuild has put the state disk in
+  place. The seed image digest in `modules/darwin/devvm.nix` is read once at
+  instance creation and does **not** move when `nix flake update nixos-lima`
+  runs.
 - The personal machine (`old`) consumes `homeModules.karabiner` (and optionally `darwinModules.input`) as a flake input; changes here reach it only via a deliberate `nix flake update nix-macos-config` there.

@@ -1,6 +1,6 @@
 # Work laptop (MDM-managed). Host-specific quirks land here; everything
 # portable belongs in modules/.
-{ lib, ... }:
+{ lib, self, ... }:
 {
   nixpkgs.hostPlatform = "aarch64-darwin";
 
@@ -36,6 +36,27 @@
       # is not self-updating, which is what rules it out under D16.
       "1password-cli"
     ];
+
+  # Local Linux VM (PLAN.md Phase 8): which guest this Mac runs, and what it
+  # gives it.
+  devvm = {
+    enable = true;
+    guest = self.nixosConfigurations.devvm;
+
+    # 8 GiB beside Docker Desktop's own 8 GiB VM on a 32 GB host, for as long
+    # as both run.
+    memory = "8GiB";
+
+    # One directory, at the identical path on both sides. Not ~ : this guest
+    # also runs third-party images, and ~/.ssh, the cloud credentials and
+    # 1Password's state have no business inside it.
+    mount = "/Users/alexm/code-shared";
+
+    # Docker Desktop is still installed here, and `docker` has to keep meaning
+    # its CLI until that is decommissioned. The wrapper would sit ahead of it
+    # on PATH and refuse to run, so it stays off.
+    dockerShims = false;
+  };
 
   # Compat marker, set once at this host's first install and then left
   # alone; the other host keeps its own value when it's ported in.
