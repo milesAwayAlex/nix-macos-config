@@ -51,11 +51,6 @@
     # also runs third-party images, and ~/.ssh, the cloud credentials and
     # 1Password's state have no business inside it.
     mount = "/Users/alexm/code-shared";
-
-    # Docker Desktop is still installed here, and `docker` has to keep meaning
-    # its CLI until that is decommissioned; the wrapper would sit ahead of it
-    # on PATH.
-    dockerShims = false;
   };
 
   # Compat marker, set once at this host's first install and then left
