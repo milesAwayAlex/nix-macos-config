@@ -60,7 +60,10 @@ long as `devvm.dockerShims` is off for the host.
 2. **Create and start.** `just devvm-up` creates the state disk and the
    instance (once each; both are idempotent) and starts it. The first start
    downloads the seed image, cached under `~/Library/Caches/lima`. What boots
-   is nixos-lima's stock NixOS, not this configuration.
+   is nixos-lima's stock NixOS, not this configuration, and on that boot only,
+   `limactl start` ends with `DEGRADED` and a non-zero exit: the template
+   tells lima to copy the cluster's kubeconfig out, and the seed has none.
+   The instance is running regardless.
 
        limactl list                  # devvm  Running
        just devvm-shell uname -a     # NixOS, aarch64
@@ -90,9 +93,10 @@ long as `devvm.dockerShims` is off for the host.
    `github:milesAwayAlex/nix-macos-config#devvm` works too; the clone only
    avoids publishing an untested change. It is not needed after this step.
 
-4. **Adopt.** `just devvm-adopt` (sudo) reads the guest's host key off the
-   state disk and pins it, then pushes the Mac's public key in. It refuses a
-   guest that has not been rebuilt yet — that refusal is the check.
+4. **Adopt.** `just devvm-adopt` reads the guest's host key off the state
+   disk and pins it, then pushes the Mac's public key in; sudo prompts once,
+   for the pin in `/etc/nix`. It refuses a guest that has not been rebuilt yet
+   — that refusal is the check.
 
 5. **Prove the builder.** `just devvm-check` opens the daemon's ssh-ng
    connection and builds a derivation that cannot be substituted. Success is a
@@ -134,11 +138,12 @@ long as `devvm.dockerShims` is off for the host.
   read-only directory in the guest: `ps`, `logs`, `pull` and friends work, and
   anything with a relative path fails at once instead of quietly using the
   wrong tree. It forwards your shell environment (lima drops PATH, HOME, SSH_*,
-  TERM, XDG_* and the like and passes the rest), which is what makes compose's
-  `${VAR}` interpolation work; containers see none of it unless passed with
-  `-e`. `docker` and `docker-compose` as further wrappers are
-  `devvm.dockerShims`, per host; they refuse to run while another `docker` is
-  on PATH, so a machine with Docker Desktop keeps them off.
+  TERM, XDG_* and the like, the wrapper adds LANG and LC_*, and the rest goes
+  through), which is what makes compose's `${VAR}` interpolation work;
+  containers see none of it unless passed with `-e`. `docker` and
+  `docker-compose` as further wrappers are `devvm.dockerShims`, per host — with
+  them on, every `docker` on the machine is nerdctl, so a machine that still
+  has Docker Desktop keeps them off.
 - **kubectl, k9s and kubectx** see the cluster as the context `devvm`.
   `KUBECONFIG` is set for every shell to `~/.kube/config` first and the copied
   file second, and the tools merge the list. Nothing is written into
@@ -173,7 +178,14 @@ the images and the disk sizes are honoured only at creation.
 
 - **`devvm-adopt`: "no host key under /var/lib/devvm/ssh".** The guest is still
   the seed, or the state disk did not mount:
-  `just devvm-shell journalctl -u devvm-state-disk` says which.
+  `just devvm-shell journalctl -u devvm-state-disk -u sshd-keygen` says which.
+  sshd's units require the mount, so a key can only be missing there if the
+  disk is; a key that turns up on the OS disk instead means a generation from
+  before that requirement — `just devvm-rebuild`, `limactl restart devvm`.
+- **`devvm-up` ends with `DEGRADED`.** Expected once, on the seed (bootstrap
+  step 2). On this configuration it means the kubeconfig copy failed:
+  `just devvm-shell journalctl -u k3s -u devvm-kubeconfig`, then
+  `limactl restart devvm`.
 - **`limactl shell` stops working after a rebuild.** `users.mutableUsers` went
   false and the rebuild deleted lima's user. Delete the instance and repeat
   bootstrap steps 2–3; the state disk survives.
@@ -182,7 +194,8 @@ the images and the disk sizes are honoured only at creation.
   failed to mount and sshd generated a fresh key onto the OS disk. The second
   case also shows as an empty cluster; `nofail` lets the guest boot without the
   disk, and this is the loud symptom. **"Permission denied (publickey)".** The
-  authorized key is missing: `just devvm-adopt`.
+  authorized key is missing or not readable by the `builder` account:
+  `just devvm-adopt` puts both right.
 - **kubectl: "context was not found for specified context: devvm".** VM
   stopped, or the kubeconfig probe timed out
   (`just devvm-shell journalctl -u k3s -u devvm-kubeconfig`); `kubectx` to
@@ -190,10 +203,6 @@ the images and the disk sizes are honoured only at creation.
   Another cluster owns localhost:6443 — Rancher Desktop — and lima logged a
   failed forward. Stop it, `limactl restart devvm`.
 - **`docker` behaves like nerdctl.** The shims are on for this host.
-- **`nerdctl: another nerdctl is on PATH`, or the same for `docker`.** The
-  wrapper found a binary of its name that it would otherwise shadow — Docker
-  Desktop's `/usr/local/bin/docker`, Rancher Desktop's `~/.rd/bin`. Remove it,
-  or for `docker` set `devvm.dockerShims = false` for this host.
 - **A relative path fails outside `~/code-shared`.** By design: the wrapper
   runs from an empty directory there. An absolute Mac path outside it gives an
   empty volume instead — bind mounts resolve in the guest, and root there

@@ -104,6 +104,9 @@ let
           script = ''
             #!/bin/bash
             set -eux -o pipefail
+            # The seed has no such unit and will never produce the file, and
+            # lima retries a failing probe 200 times.
+            [ -e /etc/systemd/system/devvm-kubeconfig.service ] || exit 0
             timeout 120s bash -c "until test -f ${roles.cluster.kubeconfig}; do sleep 3; done"
           '';
           hint = "k3s has not come up; check `limactl shell ${name} journalctl -u k3s`.";
@@ -122,12 +125,7 @@ let
   );
 
   # Everything that runs in the guest runs through `limactl shell`: nerdctl has
-  # no darwin build. Two guards make a wrapper like this safe to have on PATH.
-  #
-  # Shadowing: the wrapper lands in /run/current-system/sw/bin, ahead of the
-  # /usr/local/bin copies a manual Docker install leaves behind, and eval can
-  # see neither. So it refuses to run over another binary of its name rather
-  # than quietly taking the name; `devvm.dockerShims` is the way to yield.
+  # no darwin build.
   #
   # Working directory: lima's own rule is `cd $PWD || cd ~`, so a build started
   # outside the shared directory would quietly run against the guest user's
@@ -136,16 +134,15 @@ let
   # anywhere else the wrapper runs from /var/empty — NixOS keeps it empty, 0555
   # and immutable — so a relative path fails loudly while `ps`, `logs` and
   # `pull` work from wherever you are.
+  #
+  # Environment: forwarded, minus lima's own block list, because compose reads
+  # `''${VAR}` from it. The locale variables stay behind on top of that — the
+  # guest has its own, and a locale its glibc lacks makes every bash on the way
+  # to nerdctl print a warning.
   shim =
     bin: target:
     pkgs.writeShellScriptBin bin ''
-      while read -r other; do
-        if [ "$(${pkgs.coreutils}/bin/realpath "$other")" != ${placeholder "out"}/bin/${bin} ]; then
-          echo "${bin}: another ${bin} is on PATH at $other, and this wrapper will not shadow it." \
-            "Remove that one, or turn the wrapper off (devvm.dockerShims). DEVVM.md, When it breaks." >&2
-          exit 1
-        fi
-      done < <(type -aP ${bin})
+      export LIMA_SHELLENV_BLOCK="+LC_*,LANG,LANGUAGE"
       workdir=/var/empty
       ${lib.optionalString (cfg.mount != null) ''
         case "$PWD" in ${cfg.mount} | ${cfg.mount}/*) workdir="$PWD" ;; esac
@@ -229,7 +226,8 @@ let
 
   # Idempotent, and the only step that is not declarative — by necessity: the
   # host's key is generated per machine and the guest's is generated per VM, so
-  # neither can be known when this is built.
+  # neither can be known when this is built. Runs as the user, because limactl
+  # refuses root; the one write into /etc/nix goes through sudo.
   devvm-adopt = pkgs.writeShellApplication {
     name = "devvm-adopt";
     runtimeInputs = [
@@ -238,7 +236,6 @@ let
     ];
     text = ''
       name=${name}
-      [ "$(id -u)" = 0 ] || { echo "needs root: writes ${knownHosts}" >&2; exit 1; }
 
       # 1. The guest's host key first, because it doubles as the readiness
       #    check: it exists only once the guest runs this configuration with the
@@ -252,29 +249,31 @@ let
       #    builder on earth.
       if ! hostkey=$(limactl shell "$name" sudo cat ${guestSsh}/ssh_host_ed25519_key.pub); then
         echo "no host key under ${guestSsh}: the guest is not running the devvm" \
-          "configuration yet (DEVVM.md, Bootstrap)" >&2
+          "configuration yet, or sshd started before the state disk mounted" \
+          "(DEVVM.md, When it breaks)" >&2
         exit 1
       fi
       hostkey=$(echo "$hostkey" | cut -d' ' -f1-2)
 
       # 2. The host's public half into the guest, where sshd reads it from the
       #    state disk rather than from a generation — so it outlives rebuilds.
+      #    World-readable, like NixOS's own /etc/ssh/authorized_keys.d: sshd
+      #    opens the file *as the account*, so root-only modes lock it out.
       pub=$(cat ${keyFile}.pub)
-      limactl shell "$name" sudo install -d -m 0700 ${guestSsh}/authorized_keys.d
+      limactl shell "$name" sudo install -d -m 0755 ${guestSsh}/authorized_keys.d
       echo "$pub" |
         limactl shell "$name" sudo tee ${guestSsh}/authorized_keys.d/${roles.builder.user} >/dev/null
-      limactl shell "$name" sudo chmod 0600 ${guestSsh}/authorized_keys.d/${roles.builder.user}
+      limactl shell "$name" sudo chmod 0644 ${guestSsh}/authorized_keys.d/${roles.builder.user}
       echo "pushed $(echo "$pub" | cut -d' ' -f3) to ${roles.builder.user}@$name"
 
-      # 3. Pin it.
-      install -d -m 0755 "$(dirname ${knownHosts})"
-      touch ${knownHosts}
-      if grep -qxF "$name $hostkey" ${knownHosts}; then
+      # 3. Pin it. The file is world-readable, so only the write needs root.
+      if [ -f ${knownHosts} ] && grep -qxF "$name $hostkey" ${knownHosts}; then
         echo "host key already pinned, unchanged"
       else
-        ${pkgs.gnused}/bin/sed -i "/^$name /d" ${knownHosts}
-        echo "$name $hostkey" >> ${knownHosts}
-        chmod 0644 ${knownHosts}
+        tmp=$(mktemp)
+        { grep -v "^$name " ${knownHosts} 2>/dev/null || true; echo "$name $hostkey"; } > "$tmp"
+        sudo ${pkgs.coreutils}/bin/install -m 0644 "$tmp" ${knownHosts}
+        rm -f "$tmp"
         echo "pinned host key for $name"
       fi
     '';
@@ -323,7 +322,7 @@ in
         Put `docker` and `docker-compose` on PATH as wrappers onto the guest's
         nerdctl, when the guest has one. They land in /run/current-system/sw/bin,
         ahead of the /usr/local/bin copies a manual Docker install leaves
-        behind, and refuse to run rather than shadow one.
+        behind, and would shadow them.
       '';
     };
 

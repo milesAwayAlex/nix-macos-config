@@ -53,8 +53,8 @@
     mount = "/Users/alexm/code-shared";
 
     # Docker Desktop is still installed here, and `docker` has to keep meaning
-    # its CLI until that is decommissioned. The wrapper would sit ahead of it
-    # on PATH and refuse to run, so it stays off.
+    # its CLI until that is decommissioned; the wrapper would sit ahead of it
+    # on PATH.
     dockerShims = false;
   };
 

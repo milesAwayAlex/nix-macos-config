@@ -214,8 +214,12 @@ in
         '';
       };
 
-      # `nofail` so a disk that never showed up costs persistence, not a boot:
-      # everything below degrades to the same paths on the root filesystem.
+      # `nofail` keeps the guest bootable, and reachable over the console,
+      # without the disk. systemd then does not order the mount before
+      # local-fs.target, so every unit that writes under it says so with
+      # RequiresMountsFor and fails without the disk — otherwise sshd's key
+      # generation wins the race and its key lands on the root filesystem,
+      # hidden under the mount a second later.
       fileSystems.${stateDir} = {
         device = "/dev/disk/by-label/${stateLabel}";
         fsType = "ext4";
@@ -253,6 +257,10 @@ in
         # `limactl shell` out of the machine.
         authorizedKeysFiles = [ "${stateDir}/ssh/authorized_keys.d/%u" ];
       };
+
+      # Both the key and the authorized keys are under the state disk's mount.
+      systemd.services.sshd-keygen.unitConfig.RequiresMountsFor = stateDir;
+      systemd.services.sshd.unitConfig.RequiresMountsFor = stateDir;
 
       users.users.${cfg.builder.user} = {
         isNormalUser = true;
@@ -315,6 +323,7 @@ in
 
     (lib.mkIf (containers && !cfg.cluster.enable && cfg.stateDisk != null) {
       virtualisation.containerd.settings.root = "${stateDir}/containerd";
+      systemd.services.containerd.unitConfig.RequiresMountsFor = stateDir;
     })
 
     # ---- cluster ----
@@ -406,6 +415,7 @@ in
         ];
         depends = [ stateDir ];
       };
+      systemd.services.k3s.unitConfig.RequiresMountsFor = "/var/lib/rancher";
     })
   ];
 }

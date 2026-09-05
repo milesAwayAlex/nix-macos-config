@@ -715,6 +715,14 @@ of it survives a reboot.
   declarative version replaces it, and must not coexist with it. Not before the
   VM has proven itself under manual start, and not while Rancher Desktop can
   still start on the same machine: both clusters forward 6443 to localhost.
+- Retire Docker Desktop on `work` *(2026-09-05)*: its own uninstaller removes
+  the `/usr/local/bin` symlinks, the two privileged helpers and the 54 GB VM
+  with every image and volume in it — check `docker volume ls` first. Then
+  drop `devvm.dockerShims = false` from the host file, raise the VM's memory
+  now that the 8 GB neighbour is gone (a template change: DEVVM.md, "What a
+  change costs"), and sort out registry logins in the guest, ECR included —
+  the Mac's `~/.docker/config.json` shows which helpers were in use. Rancher
+  Desktop is the same class and the same treatment, separately.
 - sops-nix (age keys held in 1Password) when first server/VM needs deploy secrets;
   colmena `keyCommand` with `op`/`rbw` for push-time injection.
 - Lix experiment: `nix.package = pkgs.lixPackageSets.stable.lix` (+ overlay).

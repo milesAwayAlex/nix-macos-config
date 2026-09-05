@@ -779,18 +779,16 @@ counting only CRI-managed containers as users, so an image built here that no
 pod happens to be running is eligible. The thresholds are therefore raised to
 95/90 via `--kubelet-arg` rather than left at 85/80.
 
-**The Mac-side wrappers fail loudly rather than guess.** `nerdctl`, `docker`
-and `docker-compose` on the Mac are `limactl shell` wrappers, and two things
-about that are unsafe by default. lima's rule for the working directory is
-`cd $PWD || cd ~`, so a build started outside the shared directory would
-quietly run against the guest user's home; the wrappers pass `--workdir`, the
-real path under the mount and an empty immutable directory anywhere else, so a
-relative path fails and a daemon query works from wherever you are. And the
-wrappers sit ahead of `/usr/local/bin` on PATH, where a manual Docker install
-leaves its CLI, which eval cannot see; so a wrapper refuses to run over another
-binary of its name rather than take it over, and `devvm.dockerShims` is the way
-to yield. In the guest, nerdctl is rootful and every call goes through `sudo -E`,
-which is why the forwarded environment survives.
+**The Mac-side wrappers do not guess the working directory.** `nerdctl`,
+`docker` and `docker-compose` on the Mac are `limactl shell` wrappers. lima's
+rule for the working directory is `cd $PWD || cd ~`, so a build started outside
+the shared directory would quietly run against the guest user's home; the
+wrappers pass `--workdir`, the real path under the mount and an empty immutable
+directory anywhere else, so a relative path fails and a daemon query works from
+wherever you are. They forward the Mac's environment, which compose reads, but
+hold back the locale variables: the guest has its own, and one its glibc lacks
+makes every bash in the chain warn. In the guest, nerdctl is rootful and every
+call goes through `sudo -E`, which is why the forwarded environment survives.
 
 **Why buildkit needs its own unit.** `nerdctl build` needs buildkit, nixpkgs has
 no module for it, and it has to be given both the socket *and* the namespace —

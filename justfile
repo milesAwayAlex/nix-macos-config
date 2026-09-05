@@ -88,9 +88,10 @@ devvm-status:
 
 # push the host's public key in and pin the guest's host key. Once per state
 # disk, after the first rebuild has put that disk in place. Idempotent, and the
-# one step that cannot be declarative: neither key exists at build time.
+# one step that cannot be declarative: neither key exists at build time. Runs
+# as you (limactl refuses root); sudo prompts once, for the pin in /etc/nix
 devvm-adopt:
-    sudo /run/current-system/sw/bin/devvm-adopt
+    devvm-adopt
 
 # a shell in the guest, keeping the working directory
 devvm-shell *args:
@@ -109,7 +110,7 @@ devvm-rebuild flake=".":
 devvm-check:
     #!/usr/bin/env bash
     set -euo pipefail
-    sudo nix store info --store ssh-ng://devvm
+    sudo -H nix store info --store ssh-ng://devvm
     out=$(nix build --no-link --print-out-paths --impure --expr \
         'let p = (builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.aarch64-linux;
          in p.runCommand "devvm-probe" { } "uname -srm > $out"')
