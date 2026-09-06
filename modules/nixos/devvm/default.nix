@@ -41,16 +41,53 @@ let
   # and the shell `limactl shell` opens is the lima user's, so every call goes
   # through sudo. Wrapped rather than granted: a group on the socket would not
   # cover the rest. `-E` keeps the environment the Mac side forwarded, which is
-  # what compose's `''${VAR}` interpolation reads; the wheel rule is `ALL`, so
-  # sudo allows it. Also under the name the work repos call it by — a wrapper
-  # rather than a shell alias, because compose files and repo scripts are not
-  # shells.
+  # what compose's `''${VAR}` interpolation reads and where the registry
+  # credentials arrive; the wheel rule is `ALL`, so sudo allows it. Also under
+  # the name the work repos call it by — a wrapper rather than a shell alias,
+  # because compose files and repo scripts are not shells.
   nerdctl =
     bin:
     pkgs.writeShellScriptBin bin ''
+      export DOCKER_CONFIG=${dockerConfig}
       [ "$(id -u)" = 0 ] || exec /run/wrappers/bin/sudo -E ${pkgs.nerdctl}/bin/nerdctl "$@"
       exec ${pkgs.nerdctl}/bin/nerdctl "$@"
     '';
+
+  # nerdctl's credential store is the environment. The Mac's wrappers resolve
+  # credentials for the hosts they are configured to answer for and send them
+  # along in one variable — a JSON object keyed by registry host — and this
+  # helper hands them back per request, so nothing is stored in the guest and a
+  # token lives exactly as long as the call that carried it. `store` is
+  # refused: a login has nowhere to go here, by design (D23). The config that
+  # names the helper lives in the store, read-only, which nerdctl and buildkit
+  # both accept. The not-found reply is the protocol's literal sentinel; any
+  # other text is taken for an error, and nerdctl has been seen to hang on one.
+  dockerConfig = pkgs.writeTextDir "config.json" (builtins.toJSON { credsStore = "devvm"; });
+  credentialHelper = pkgs.writeShellApplication {
+    name = "docker-credential-devvm";
+    runtimeInputs = [ pkgs.jq ];
+    text = ''
+      auth=''${${cfg.containers.registryAuthEnv}:-"{}"}
+      case "''${1:-}" in
+        get)
+          # One registry is asked for under several spellings — with a scheme,
+          # with :443, with a path — so reduce them to the host.
+          host=$(sed -E 's#^https?://##; s#/.*$##; s#:443$##')
+          if cred=$(jq -ce --arg h "$host" '.[$h]' <<<"$auth" 2>/dev/null); then
+            printf '%s\n' "$cred"
+          else
+            echo "credentials not found in native keychain"
+            exit 1
+          fi
+          ;;
+        list) jq -c 'map_values(.Username)' <<<"$auth" ;;
+        *)
+          echo "docker-credential-devvm: registry logins live on the Mac (devvm.registryAuth); nothing is stored here" >&2
+          exit 1
+          ;;
+      esac
+    '';
+  };
 in
 {
   imports = [ (modulesPath + "/profiles/qemu-guest.nix") ];
@@ -82,7 +119,19 @@ in
       '';
     };
 
-    containers.enable = lib.mkEnableOption "containerd, nerdctl and buildkit";
+    containers = {
+      enable = lib.mkEnableOption "containerd, nerdctl and buildkit";
+      registryAuthEnv = lib.mkOption {
+        type = lib.types.str;
+        default = "DEVVM_REGISTRY_AUTH";
+        readOnly = true;
+        description = ''
+          The variable in which the Mac's wrappers deliver registry credentials
+          for one call: a JSON object keyed by registry host. Read-only and
+          published because the host half has to send exactly this name.
+        '';
+      };
+    };
 
     cluster = {
       enable = lib.mkEnableOption "a single-node k3s cluster (brings its own containerd)";
@@ -138,6 +187,14 @@ in
           device = "nodev";
           efiSupport = true;
           efiInstallAsRemovable = true;
+          # /boot is the seed's 249 MiB EFI partition, and GRUB copies the
+          # kernel and initrd of every menu entry onto it: 90 MiB a pair, so
+          # two fit, and an install holds the listed pairs and the new one at
+          # once before it prunes. One entry, then — the third distinct kernel
+          # would fail the switch with "No space left on device". Rollback does
+          # not need the menu: `nixos-rebuild --rollback` re-installs the
+          # previous generation, and nothing ever sees the menu here anyway.
+          configurationLimit = 1;
         };
       };
       fileSystems."/boot" = {
@@ -277,8 +334,15 @@ in
       environment.systemPackages = [
         (nerdctl "nerdctl")
         (nerdctl "docker")
+        credentialHelper
         pkgs.cri-tools
       ];
+
+      # The credentials arrive over the SSH session, sent by the Mac's wrappers
+      # with SendEnv; sshd drops what it was not told to accept. lima's own
+      # environment forwarding travels on the command line instead, which is
+      # exactly why this variable does not go that way.
+      services.openssh.settings.AcceptEnv = [ cfg.containers.registryAuthEnv ];
 
       # One place the socket and the namespace are written down for every
       # client. nerdctl's own documentation uses exactly this pair for k3s.

@@ -718,11 +718,21 @@ of it survives a reboot.
 - Retire Docker Desktop on `work` *(2026-09-05)*: its own uninstaller removes
   the `/usr/local/bin` symlinks, the two privileged helpers and the 54 GB VM
   with every image and volume in it — check `docker volume ls` first. Then
-  drop `devvm.dockerShims = false` from the host file, raise the VM's memory
-  now that the 8 GB neighbour is gone (a template change: DEVVM.md, "What a
-  change costs"), and sort out registry logins in the guest, ECR included —
-  the Mac's `~/.docker/config.json` shows which helpers were in use. Rancher
-  Desktop is the same class and the same treatment, separately.
+  drop `devvm.dockerShims = false` from the host file and raise the VM's
+  memory now that the 8 GB neighbour is gone (a template change: DEVVM.md,
+  "What a change costs"). Rancher Desktop is the same class and the same
+  treatment, separately.
+- Registry-only service account for image pulls *(2026-09-05)*: the token the
+  dev VM receives for `gcr.io` is the engineer's own, scoped `cloud-platform`.
+  gcloud honours `auth/impersonate_service_account` everywhere, `config-helper`
+  included, so a service account holding only Artifact Registry reader (writer
+  if laptops push), with the team's group granted token creator on it, turns
+  that into a registry credential: `CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT`
+  in the credential command here, and in a two-line wrapper around
+  `docker-credential-gcloud` for Docker Desktop and Rancher Desktop users,
+  whose gcr.io helper is the same gcloud underneath. No keys, audit logs keep
+  the human, one IAM call more per mint. Needs someone with IAM rights on the
+  employer side.
 - sops-nix (age keys held in 1Password) when first server/VM needs deploy secrets;
   colmena `keyCommand` with `op`/`rbw` for push-time injection.
 - Lix experiment: `nix.package = pkgs.lixPackageSets.stable.lix` (+ overlay).

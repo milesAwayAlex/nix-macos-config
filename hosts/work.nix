@@ -1,6 +1,32 @@
 # Work laptop (MDM-managed). Host-specific quirks land here; everything
 # portable belongs in modules/.
-{ lib, self, ... }:
+{
+  lib,
+  pkgs,
+  self,
+  ...
+}:
+let
+  # What the dev VM's wrappers run for Google registries. gcloud's helper for
+  # external tools reports the token *and* its expiry — the call kubectl's GKE
+  # plugin makes — and `--min-expiry` refreshes one with under half an hour
+  # left, so gcloud runs at most twice an hour and never hands over a token
+  # about to die. Impersonation is honoured here like everywhere in gcloud
+  # (PLAN.md backlog, the registry-only service account). Prompts off, so a
+  # survey or an update nag cannot hold a pull.
+  gcloudRegistryCredential = pkgs.writeShellApplication {
+    name = "gcloud-registry-credential";
+    runtimeInputs = [
+      pkgs.google-cloud-sdk
+      pkgs.jq
+    ];
+    text = ''
+      export CLOUDSDK_CORE_DISABLE_PROMPTS=1
+      gcloud config config-helper --min-expiry=30m --format=json |
+        jq -c '{Username: "oauth2accesstoken", Secret: .credential.access_token, ExpiresAt: .credential.token_expiry}'
+    '';
+  };
+in
 {
   nixpkgs.hostPlatform = "aarch64-darwin";
 
@@ -51,6 +77,11 @@
     # also runs third-party images, and ~/.ssh, the cloud credentials and
     # 1Password's state have no business inside it.
     mount = "/Users/alexm/code-shared";
+
+    # Registries this Mac answers for; the credential is resolved here and
+    # never stored in the guest (D23). gcr.io is the one work uses today, and
+    # an Artifact Registry host would take the same command.
+    registryAuth."gcr.io" = lib.getExe gcloudRegistryCredential;
   };
 
   # Compat marker, set once at this host's first install and then left

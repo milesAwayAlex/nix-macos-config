@@ -790,6 +790,33 @@ hold back the locale variables: the guest has its own, and one its glibc lacks
 makes every bash in the chain warn. In the guest, nerdctl is rootful and every
 call goes through `sudo -E`, which is why the forwarded environment survives.
 
+**Registry credentials are resolved on the Mac and delivered per call, never
+stored in the guest.** Docker Desktop never had this problem: its CLI runs on
+the Mac, resolves credentials through the Mac's helpers at the moment of a pull
+and sends them inside that one API request, and the daemon stores nothing.
+Rancher Desktop's containerd mode recreates that with a credential server on
+the Mac, a password file written into the VM on every start and a helper that
+forwards each lookup over HTTP. Here nerdctl has no client on the Mac, but every
+call already passes through the wrappers, so they carry the answer: for each
+host in `devvm.registryAuth` they run the declared command — or reuse an answer
+whose stated expiry is still ahead, kept 0600 in the per-user temp directory,
+the same exposure as gcloud's own token store — and pass the result in one
+variable. That variable rides the SSH session (`SendEnv` on the Mac, `AcceptEnv`
+in the guest) rather than lima's `env` prefix, so it is on no command line on
+either side. In the guest, `docker-credential-devvm` is nerdctl's credential
+store: it answers from the variable for the declared hosts, returns the
+protocol's not-found sentinel for everything else, and refuses `store`, so a
+login cannot leave anything behind. The expiry comes from the issuer: for
+Google, `gcloud config config-helper` reports the token's expiry and
+`--min-expiry` refreshes one with little life left, which is also how kubectl's
+GKE plugin decides. Rejected: a login that writes an hour-long token into the
+guest's docker config (an hour on the guest's disk, for any container with a
+bind mount to find), and a Rancher-style forwarder (a listening service, a
+per-boot secret exchange, and a round trip for each of the many spellings
+nerdctl asks about per pull). Accepted: a long-running nerdctl process
+authenticates with the credential it started with, and the cluster's own pulls
+are a separate path.
+
 **Why buildkit needs its own unit.** `nerdctl build` needs buildkit, nixpkgs has
 no module for it, and it has to be given both the socket *and* the namespace —
 `--containerd-worker-addr` and `--containerd-worker-namespace` — or a built

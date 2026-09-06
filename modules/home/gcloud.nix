@@ -11,6 +11,7 @@ let
       gke-gcloud-auth-plugin # kubectl's exec-auth plugin for GKE; not in the base package
     ]
   );
+
 in
 {
   home.packages = [ gcloud ];

@@ -31,6 +31,9 @@ let
   # Read from the guest, never restated: the two halves have to agree on where
   # the key goes and there is no reason for two literals.
   guestSsh = "${roles.stateDir}/ssh";
+  # The variable the guest's credential store reads; published by the guest so
+  # the two halves cannot disagree on it.
+  authEnv = roles.containers.registryAuthEnv;
 
   keyFile = "/etc/nix/devvm_ed25519";
   knownHosts = "/etc/nix/devvm_known_hosts";
@@ -124,6 +127,52 @@ let
     }
   );
 
+  # The Mac's half of the guest's credential store. For each host in
+  # `registryAuth`: the last answer, if it carried an expiry still a minute
+  # ahead, otherwise the command; out comes the object the guest's helper reads.
+  # Answers with an expiry are kept 0600 in the per-user temp directory — the
+  # same place, and the same exposure, as gcloud's own token store; answers
+  # without one are never written down. A failing command costs that host its
+  # credentials and says so, and the call goes on: the pull then fails at the
+  # registry rather than here.
+  devvm-registry-auth = pkgs.writeShellApplication {
+    name = "devvm-registry-auth";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.jq
+    ];
+    text = ''
+      cache="''${TMPDIR:-/tmp}/devvm-registry-auth"
+      install -d -m 0700 "$cache"
+      umask 077
+      declare -A commands=(${
+        lib.concatStringsSep " " (
+          lib.mapAttrsToList (
+            host: command: "[${lib.escapeShellArg host}]=${lib.escapeShellArg command}"
+          ) cfg.registryAuth
+        )
+      })
+      auth='{}'
+      for host in "''${!commands[@]}"; do
+        file="$cache/$host"
+        if [ -f "$file" ] && jq -e '(.ExpiresAt | fromdateiso8601) > now + 60' "$file" >/dev/null 2>&1; then
+          cred=$(cat "$file")
+        else
+          if ! cred=$(bash -c "''${commands[$host]}") ||
+            ! jq -e 'has("Username") and has("Secret")' <<<"$cred" >/dev/null 2>&1; then
+            echo "devvm: no credentials for $host: its command failed or printed no {Username, Secret}" >&2
+            continue
+          fi
+          if jq -e 'has("ExpiresAt")' <<<"$cred" >/dev/null; then
+            printf '%s' "$cred" > "$file"
+          fi
+        fi
+        auth=$(jq -c --arg h "$host" --argjson c "$cred" '.[$h] = ($c | {Username, Secret})' <<<"$auth")
+      done
+      printf '%s' "$auth"
+    '';
+  };
+
   # Everything that runs in the guest runs through `limactl shell`: nerdctl has
   # no darwin build.
   #
@@ -139,10 +188,21 @@ let
   # `''${VAR}` from it. The locale variables stay behind on top of that — the
   # guest has its own, and a locale its glibc lacks makes every bash on the way
   # to nerdctl print a warning.
+  #
+  # Credentials: resolved here for the hosts in `registryAuth` and delivered in
+  # one variable, for this call only. lima forwards the environment as an `env`
+  # prefix on the ssh command line, so that variable is held back from the
+  # forwarding and sent through ssh's own SendEnv instead — lima takes the ssh
+  # command line from `$SSH` — which keeps it off every process list on the
+  # way; the guest's sshd accepts exactly this name.
   shim =
     bin: target:
     pkgs.writeShellScriptBin bin ''
       export LIMA_SHELLENV_BLOCK="+LC_*,LANG,LANGUAGE"
+      ${lib.optionalString (cfg.registryAuth != { }) ''
+        ${authEnv}=$(${devvm-registry-auth}/bin/devvm-registry-auth)
+        export ${authEnv} SSH="ssh -o SendEnv=${authEnv}" LIMA_SHELLENV_BLOCK="$LIMA_SHELLENV_BLOCK,SSH,${authEnv}"
+      ''}
       workdir=/var/empty
       ${lib.optionalString (cfg.mount != null) ''
         case "$PWD" in ${cfg.mount} | ${cfg.mount}/*) workdir="$PWD" ;; esac
@@ -156,6 +216,7 @@ let
       pkgs.lima
       pkgs.kubectl
       pkgs.openssh
+      pkgs.jq
     ];
     text = ''
       name=${name}
@@ -183,6 +244,19 @@ let
           echo "   host key NOT pinned — \`just devvm-adopt\`"
         fi
         echo "   verify   sudo nix store info --store ssh-ng://$name"
+      ''}
+
+      ${lib.optionalString (cfg.registryAuth != { }) ''
+        echo "── registry credentials (resolved here, delivered per call)"
+        hosts=(${lib.escapeShellArgs (lib.attrNames cfg.registryAuth)})
+        for host in "''${hosts[@]}"; do
+          file="''${TMPDIR:-/tmp}/devvm-registry-auth/$host"
+          if [ -f "$file" ]; then
+            printf '   %-20s cached until %s\n' "$host" "$(jq -r '.ExpiresAt' "$file")"
+          else
+            printf '   %-20s asked for on every call\n' "$host"
+          fi
+        done
       ''}
 
       if [ "$status" != "Running" ]; then
@@ -323,6 +397,23 @@ in
         nerdctl, when the guest has one. They land in /run/current-system/sw/bin,
         ahead of the /usr/local/bin copies a manual Docker install leaves
         behind, and would shadow them.
+      '';
+    };
+
+    registryAuth = lib.mkOption {
+      type = lib.types.attrsOf lib.types.str;
+      default = { };
+      example = lib.literalExpression ''{ "gcr.io" = lib.getExe gcloudRegistryCredential; }'';
+      description = ''
+        Registry hosts this Mac answers for, each with a command that prints
+        the credential as JSON — `{"Username": …, "Secret": …}`, plus
+        `"ExpiresAt": "2026-09-05T23:26:25Z"` (that exact form, UTC) when it
+        is a token with a known life. The wrappers run the command, keep an
+        answer with an expiry until it expires, and hand the result to the
+        guest's nerdctl for the duration of each call. A credential without an
+        expiry is asked for on every call and never written down, so its
+        command has to answer quickly and silently. Nothing here is a
+        credential; the commands are.
       '';
     };
 

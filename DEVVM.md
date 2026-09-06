@@ -22,11 +22,15 @@ On the Mac:
 | `~/.lima/_disks/devvm-state/` | the state disk | `devvm-up` |
 | `~/code-shared` | the one host directory the guest sees, at the same path on both sides | lima, on first start |
 | `KUBECONFIG`, in every shell | `~/.kube/config` first, the copied kubeconfig second; the tools merge the list | switch |
+| `$TMPDIR/devvm-registry-auth/` | registry credentials that carry an expiry, one file per host, 0600, reused until they expire | the wrappers |
 
 In the guest:
 
 - The OS disk (60 GiB) is disposable. Every rebuild rewrites it and a
-  `limactl delete` throws it away.
+  `limactl delete` throws it away. Its EFI partition is the seed's 249 MiB, and
+  GRUB copies a 90 MiB kernel-and-initrd pair onto it per menu entry, so the
+  menu lists the current generation only; older generations stay in the store
+  for `nixos-rebuild --rollback`.
 - The state disk (`devvm-state`, 40 GiB) is mounted at `/var/lib/devvm` and
   holds what should outlive the OS disk: `ssh/` (sshd's host keys and the
   `builder` user's authorized key) and `rancher/`, bind-mounted onto
@@ -152,8 +156,25 @@ long as `devvm.dockerShims` is off for the host.
   context was in it, where a dead 6443 would hang.
 - **The builder** is transparent: any `aarch64-linux` derivation the daemon is
   asked for goes to the guest. `just devvm-check` is the proof when in doubt.
-- **Registry credentials** live in the guest: `nerdctl login` writes the guest
-  user's `~/.docker/config.json`, not the Mac's.
+- **Registry credentials** are resolved on the Mac and never stored in the
+  guest. `devvm.registryAuth` in the host file names each registry host and a
+  command that prints its credential. On every call the wrappers run those
+  commands — or reuse an answer whose expiry is still ahead — and hand the
+  result to the guest's nerdctl for that call only, through the SSH session
+  rather than the command line. In the guest, `docker-credential-devvm` is
+  nerdctl's credential store: it answers for the declared hosts and reports
+  nothing for the rest, so public registries stay anonymous, and it refuses
+  `nerdctl login` with a pointer back here. For `gcr.io` the command is
+  gcloud's own helper for external tools, which reports a token *and* its
+  expiry and is told to refresh anything with under thirty minutes left, so
+  gcloud runs at most twice an hour; `just devvm-status` shows what is cached
+  and until when. A long-running nerdctl process, `compose up` say,
+  authenticates with what it started with. `just devvm-shell nerdctl …`
+  bypasses the wrappers and carries no credentials. The cluster's own pulls
+  are a separate path — k3s does not read nerdctl's store — so an image the
+  cluster needs from a private registry is pulled with `nerdctl pull` first
+  and referenced with `imagePullPolicy: IfNotPresent`; it is the same store
+  (D23).
 
 ## What a change costs
 
@@ -169,6 +190,7 @@ the images and the disk sizes are honoured only at creation.
 | Which role set this Mac runs (`devvm.guest`) | `hosts/work.nix` | `just switch`, then `just devvm-rebuild .#<name>` once — the hostname follows the attribute from there; the template's kubeconfig copy follows the cluster role, so re-sync the instance copy as above |
 | A role set that does not exist yet | `flake.nix`, one line | as above |
 | CPUs, memory, the shared directory | `hosts/work.nix` (`devvm.*`, beside the shims) | `just switch`, re-sync the instance copy, start |
+| A registry host, or how its credential is made | `hosts/work.nix` (`devvm.registryAuth`) | `just switch`; a guest from before the credential store needs one `just devvm-rebuild` |
 | ssh port | `hosts/work.nix` | the same, and both sides before the next start: the daemon's alias and the instance must agree |
 | Seed image or `vmType` | `modules/darwin/devvm.nix` | `just devvm-down`, `limactl delete devvm`, then bootstrap steps 2–3 again. The state disk carries both keys, so no adopt, and the cluster comes back |
 | `nix flake update nixos-lima` | `flake.lock` | `just devvm-rebuild`; the guest protocol module moves, the seed digest does not, and it only matters at the next creation |
@@ -186,6 +208,18 @@ the images and the disk sizes are honoured only at creation.
   step 2). On this configuration it means the kubeconfig copy failed:
   `just devvm-shell journalctl -u k3s -u devvm-kubeconfig`, then
   `limactl restart devvm`.
+- **`devvm-rebuild`: "cannot copy … to /boot/kernels/…: No space left on
+  device".** The EFI partition is full of kernels from generations the menu
+  still lists — a guest from before the one-entry menu — or a half-copied
+  `.tmp` from a previous failure. The installer copies the new pair before it
+  prunes, so make room by hand once, keeping the running kernel's pair
+  (`uname -r`):
+
+      limactl shell devvm sudo sh -c 'ls -la /boot/kernels; rm /boot/kernels/*.tmp'
+      limactl shell devvm sudo rm /boot/kernels/<old kernel>-Image /boot/kernels/<its initrd>
+
+  then `just devvm-rebuild` again; from then on the installer keeps the
+  partition at two pairs at most.
 - **`limactl shell` stops working after a rebuild.** `users.mutableUsers` went
   false and the rebuild deleted lima's user. Delete the instance and repeat
   bootstrap steps 2–3; the state disk survives.
@@ -202,6 +236,23 @@ the images and the disk sizes are honoured only at creation.
   another context meanwhile. **"certificate signed by unknown authority".**
   Another cluster owns localhost:6443 — Rancher Desktop — and lima logged a
   failed forward. Stop it, `limactl restart devvm`.
+- **A pull is refused with `401` or "unauthorized".** The registry is not in
+  `devvm.registryAuth`, or its command failed — the wrapper says so on stderr
+  before nerdctl runs, and for gcr.io that is usually `gcloud auth login`
+  being due. After switching gcloud accounts the cached answer stays until it
+  expires: `rm -r "$TMPDIR/devvm-registry-auth"`. If the command works and the
+  pull still fails, the variable is not arriving: either the guest predates the
+  credential store and its sshd does not accept it (`just devvm-rebuild`), or
+  lima's persistent ssh connection predates the rebuild that taught sshd to —
+  every `limactl shell` multiplexes over one control master, and the sshd
+  child serving it keeps the config it started with. Drop it, and lima opens a
+  fresh one on the next call:
+
+      ssh -F ~/.lima/devvm/ssh.config -O exit lima-devvm
+
+  This closes every session riding on it, an open `just devvm-shell` included.
+- **`nerdctl login` fails with "registry logins live on the Mac".** By design:
+  declare the host in `devvm.registryAuth` instead.
 - **`docker` behaves like nerdctl.** The shims are on for this host.
 - **A relative path fails outside `~/code-shared`.** By design: the wrapper
   runs from an empty directory there. An absolute Mac path outside it gives an

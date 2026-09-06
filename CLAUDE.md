@@ -63,5 +63,7 @@ Declarative macOS machine configuration: flake-based nix-darwin + home-manager (
   exist at runtime, and only after the first rebuild has put the state disk in
   place. The seed image digest in `modules/darwin/devvm.nix` is read once at
   instance creation and does **not** move when `nix flake update nixos-lima`
-  runs.
+  runs. Registry credentials are resolved on the Mac (`devvm.registryAuth`)
+  and delivered to the guest per call; `nerdctl login` in the guest is refused
+  by design.
 - The personal machine (`old`) consumes `homeModules.karabiner` (and optionally `darwinModules.input`) as a flake input; changes here reach it only via a deliberate `nix flake update nix-macos-config` there.
