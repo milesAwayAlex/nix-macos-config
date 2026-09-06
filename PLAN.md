@@ -188,7 +188,7 @@ converge-after-edit ☑ *(proven repeatedly during the config review — every
 karabiner.json iteration switched cleanly)*; reboot survival ☐ — verify at the
 next natural reboot, no dedicated test needed.
 
-## Phase 3 — App layer: casks, browsers, password managers ☐
+## Phase 3 — App layer: casks, browsers, password managers — **complete 2026-09-06** ☑
 
 - [x] **nix-homebrew** *(2026-08-20)* owns the Homebrew installation, so a
       fresh machine needs no curl-bash. Homebrew cannot be a nix package — a
@@ -242,8 +242,9 @@ next natural reboot, no dedicated test needed.
       putting a curl-pipe on the `switch` path. `~/.claude/settings.json`
       stays unmanaged per D13.
 
-**Gate:** `chrome://policy` shows the baseline; `ssh` prompts via 1Password;
-cask self-updates confirmed working (no permission errors).
+**Gate:** `chrome://policy` shows the baseline ☑; `ssh` prompts via 1Password ☑;
+cask self-updates confirmed working (no permission errors) ☑. The boxes were
+complete on 2026-08-21; the header waited on the gate.
 
 ## Phase 4 — Shell + CLI environment — **complete 2026-08-20** ☑
 
@@ -511,7 +512,11 @@ which mostly re-applies on restart. This repo owns the **inner OS** outright,
 rebuilt with `nixos-rebuild` any time. Keep the outer shape boring so it rarely
 needs recreating.
 
-- [ ] **Roles, so the guest can be less than all of it** *(2026-08-30)*.
+*Status 2026-09-06:* built and in daily use since 2026-09-05. Every bullet
+below was implemented as written unless its text says otherwise; DEVVM.md is
+the operating manual, D22 and D23 the decisions.
+
+- [x] **Roles, so the guest can be less than all of it** *(2026-08-30)*.
       `devvm.builder`, `devvm.containers` and `devvm.cluster` as separate
       enables, because the three need not travel together — `old` may want only
       the builder. The consequence to design around is that containerd's socket
@@ -525,17 +530,19 @@ needs recreating.
       `devvm-builder`, exported as `nixosConfigurations` and independent of
       any Mac. A Mac names the one it runs in its host file, beside sizing and
       the shared directory, and the darwin module reads the roles from it.
-- [ ] **Outer shape.** `vmType: vz` for Apple Virtualization. Guest state — k3s,
+- [x] **Outer shape.** `vmType: vz` for Apple Virtualization. Guest state — k3s,
       containerd, and `/etc/ssh` — on a lima
       `disks:` volume, so the OS disk stays disposable and recreation costs a
       rebuild rather than a bootstrap. Sizing is per host: on `work` (M1 Max, 8P + 2E,
-      32 GB) 6 vCPU and 8 GB while Docker Desktop's own 8 GB VM still runs
-      beside it, ~12 GB once it is gone; `old` is smaller. Whatever launchd job starts the VM must not be
+      32 GB) 6 vCPU and 8 GB — sized beside Docker Desktop's own 8 GB VM and kept
+      there after Docker Desktop and Rancher Desktop were retired
+      *(2026-09-06)*: Docker ran on 8 for years, so it moves when something
+      asks for more; `old` is smaller. Whatever launchd job starts the VM must not be
       `ProcessType = "Background"` — that confines a job to the efficiency
       cores and throttles its I/O. `Standard` is right; `Interactive` would
       fight the desktop for performance cores. nix-darwin's own linux-builder
       daemon sets none of these and inherits `Standard`.
-- [ ] **Narrow mount.** `~/code-shared`, mounted at the identical path,
+- [x] **Narrow mount.** `~/code-shared`, mounted at the identical path,
       `writable: true`. Bind mounts are resolved by the *daemon*, in the
       guest's filesystem, so `-v $PWD:/app` works only when the path matches on
       both sides — that identity is what Docker Desktop, colima and OrbStack
@@ -549,7 +556,7 @@ needs recreating.
       EXPERIMENTAL and off, so file-watching may need polling
       (`CHOKIDAR_USEPOLLING`, `--poll`); Docker Desktop's virtiofs does
       propagate events, and this is the one ergonomic regression against it.
-- [ ] **One containerd — no dockerd, no registry.** k3s already embeds
+- [x] **One containerd — no dockerd, no registry.** k3s already embeds
       containerd, so point `nerdctl` at `/run/k3s/containerd/containerd.sock`
       and namespace `k8s.io` and an image built locally *is* the image the
       cluster runs: one daemon, one content store, no push/pull and no
@@ -566,7 +573,7 @@ needs recreating.
       CRI-managed containers as users, so an image you built but no pod is
       running is eligible. Raise the threshold through `--kubelet-arg` rather
       than meet this at 85% full.
-- [ ] **Packaged components: keep metrics-server, drop traefik**
+- [x] **Packaged components: keep metrics-server, drop traefik**
       *(2026-08-30)*. k3s ships traefik, servicelb, metrics-server and
       local-path-provisioner. metrics-server earns its place — it fills k9s's
       CPU and memory columns and makes `kubectl top` answer — and
@@ -580,9 +587,9 @@ needs recreating.
       with no LoadBalancer service it creates nothing, so keeping it makes
       turning traefik back on a one-word change. The failure without it is loud
       (an Ingress simply does nothing), the same test the emulation bullet uses.
-- [ ] **Visibility.** Four questions, four tools, not interchangeable: is the VM
+- [x] **Visibility.** Four questions, four tools, not interchangeable: is the VM
       up (`limactl list`), is the builder usable
-      (`nix store ping --store ssh-ng://devvm`), what workloads are running
+      (`nix store info --store ssh-ng://devvm`), what workloads are running
       (`k9s`, already installed by `modules/home/k8s.nix`), and what is really
       in the content store (`nerdctl images`; `crictl` for the kubelet's own
       view). k9s renders Pod objects, so a `nerdctl run` or `nerdctl compose`
@@ -601,7 +608,7 @@ needs recreating.
       every command runs in the guest and path identity is what makes it feel
       local. Then `just devvm-status`, layered like `dns-status` and
       `prefs-status`.
-- [ ] **Emulation stays off until something needs it** *(2026-08-30)*. The only
+- [x] **Emulation stays off until something needs it** *(2026-08-30)*. The only
       thing it buys here is running x86_64 *Linux* binaries in the guest —
       amd64-only images, and `--platform linux/amd64` builds — and the failure
       is loud and immediate (`exec format error`), so there is nothing to
@@ -615,8 +622,11 @@ needs recreating.
       the builder claim `x86_64-linux` derivations; then
       `virtualisation.rosetta.enable` plus lima's `rosetta.enabled`, two lines,
       fast, Apple-only, and aimed at running workloads rather than at being a
-      build platform.
-- [ ] **Builder keys — per machine, never in the repo or the store.**
+      build platform. *2026-09-06: the first employer image pulled was
+      amd64-only, exactly the trigger named here, and the answer was still no —
+      the compose recipes pin arm variants for that reason, so the ladder stays
+      unclimbed.*
+- [x] **Builder keys — per machine, never in the repo or the store.**
       `nix.linux-builder` cannot be adopted as-is. nixpkgs commits the guest's
       *host private key* (`./keys/ssh_host_ed25519_key`), so every builder on
       earth shares one identity; and `run-builder` runs `nix-store --add` over
@@ -625,14 +635,16 @@ needs recreating.
       against principle 5. Instead: generate `/etc/nix/devvm_ed25519` at
       activation when absent (0600, root); let the guest generate its own host
       key on first boot and keep it on the data disk, so the identity survives
-      every rebuild; have the Mac learn it once by `ssh-keyscan`, written to
-      `/etc/nix/known_hosts` only when the entry is missing. That leaves one
-      trust-on-first-use moment, seconds after we created the VM, on a loopback
-      port lima has already bound — narrow, and once per machine rather than
-      once per VM. Optional closure: compare the scanned key against
-      `limactl shell devvm cat /etc/ssh/ssh_host_ed25519_key.pub`, two
-      independent paths to the same value.
-- [ ] **Registration.** An `/etc/ssh/ssh_config.d/` alias carrying port, user,
+      every rebuild; have the Mac learn it once — `devvm-adopt` reads the
+      public half off the state disk through `limactl shell` and pins it in
+      `/etc/nix/devvm_known_hosts` under a `HostKeyAlias`, and the same step
+      pushes the Mac's public key onto the state disk. One trust window,
+      seconds long, on lima's own ssh — the window `limactl shell` itself lives
+      in — and once per machine rather than once per VM, because the state
+      disk keeps the identity across recreation. *(Built 2026-09-05; the
+      `ssh-keyscan` variant planned here was dropped for one mechanism instead
+      of two.)*
+- [x] **Registration.** An `/etc/ssh/ssh_config.d/` alias carrying port, user,
       `IdentityFile` and `UserKnownHostsFile` — system-wide, because the nix
       *daemon* running as host root is the ssh client, not you, and nothing in
       `~/.ssh` is visible to it. `HostKeyAlias`, because `known_hosts` is keyed
@@ -643,7 +655,7 @@ needs recreating.
       dependencies from the cache instead of the Mac pushing them through the
       SSH pipe. Guest side: `builder` in `nix.settings.trusted-users`, not
       root.
-- [ ] **Bootstrap: seed image, then rebuild** *(2026-08-30)*. nixos-lima
+- [x] **Bootstrap: seed image, then rebuild** *(2026-08-30)*. nixos-lima
       publishes digest-pinned qcow2 release assets, so `limactl start` boots a
       working NixOS guest with no Linux builder on the host at all; that guest
       then runs `nixos-rebuild switch --flake .#devvm` and becomes ours. This
@@ -665,15 +677,35 @@ needs recreating.
       change to D6. `vmType: vz` is unverified by us but not novel: their
       template names no vmType, and lima 2.x defaults to vz on Apple Silicon,
       so their seed already boots under vz for anyone following their README.
-- [ ] **Abort condition.** If a NixOS guest is not booting under lima within a
+      *2026-09-06: `/boot` is the seed's 249 MiB EFI partition, and GRUB
+      copies a 90 MiB kernel-and-initrd pair onto it per menu entry, so the
+      menu is one entry deep (`configurationLimit = 1`); the third distinct
+      kernel had failed a switch with "No space left on device".*
+- [x] **Registry credentials are resolved on the Mac and delivered per call**
+      *(2026-09-06)*. Principle 5 applied to the one credential the guest
+      needs: the wrappers run a declared command per registry host
+      (`devvm.registryAuth`), cache the answer until the expiry the issuer
+      reports, and hand it to the guest's nerdctl for one call over the SSH
+      session itself; in the guest, a credential helper is the store and
+      `nerdctl login` is refused. gcloud's `config-helper` supplies token and
+      expiry both, the way kubectl's GKE plugin reads it. D23 has the
+      reasoning and the rejected shapes.
+- [x] **The guest collects garbage like the Mac** *(2026-09-06)*: D4's
+      schedule and reactive floor, the floor sized for the 60 GiB OS disk.
+      Prompted by the boot partition, which GC would not have saved, but the
+      store had no collector at all.
+- [x] **Abort condition.** If a NixOS guest is not booting under lima within a
       bounded effort, fall back to colima plus a separate `nix.linux-builder`
       and revisit. Written down now so the fallback is a decision already made
-      rather than one made while frustrated.
+      rather than one made while frustrated. *Not needed: the seed booted
+      under vz first time.*
 
 **Gate:** `nix build --system aarch64-linux` succeeds from the Mac with no
 manual key step; `nerdctl compose up` runs a work repo out of `~/code-shared`;
 `k9s` reaches the cluster; an image built locally runs in it without a push; all
-of it survives a reboot.
+of it survives a reboot. *2026-09-06: four of five hold — the builder ☑, k9s ☑,
+a local image in the cluster ☑, a reboot ☑. The compose condition waits for a
+work repo to live in `~/code-shared`; no rush.*
 
 
 ---
@@ -712,16 +744,10 @@ of it survives a reboot.
   daemon: `~/.lima` and the hostagent are per-user. `ProcessType = "Standard"`
   per the Phase 8 note. lima's own `limactl start-at-login` does the same job
   imperatively by writing a plist into `~/Library/LaunchAgents` — the
-  declarative version replaces it, and must not coexist with it. Not before the
-  VM has proven itself under manual start, and not while Rancher Desktop can
-  still start on the same machine: both clusters forward 6443 to localhost.
-- Retire Docker Desktop on `work` *(2026-09-05)*: its own uninstaller removes
-  the `/usr/local/bin` symlinks, the two privileged helpers and the 54 GB VM
-  with every image and volume in it — check `docker volume ls` first. Then
-  drop `devvm.dockerShims = false` from the host file and raise the VM's
-  memory now that the 8 GB neighbour is gone (a template change: DEVVM.md,
-  "What a change costs"). Rancher Desktop is the same class and the same
-  treatment, separately.
+  declarative version replaces it, and must not coexist with it. Rancher
+  Desktop, which contended for 6443, is gone *(2026-09-06)*; what remains to
+  decide is whether anything always-on lives in the VM, which is what would
+  make this necessary rather than convenient.
 - Registry-only service account for image pulls *(2026-09-05)*: the token the
   dev VM receives for `gcr.io` is the engineer's own, scoped `cloud-platform`.
   gcloud honours `auth/impersonate_service_account` everywhere, `config-helper`

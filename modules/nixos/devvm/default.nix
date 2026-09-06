@@ -216,6 +216,19 @@ in
         "nix-command"
         "flakes"
       ];
+
+      # D4 on the guest too: the store here grows with every rebuild and with
+      # every builder job whose output the Mac has already copied back. The
+      # reactive floor is sized for the 60 GiB OS disk, which holds the store
+      # and little else — the cluster's images live on the state disk.
+      nix.gc = {
+        automatic = true;
+        dates = "weekly";
+        options = "--delete-older-than 14d";
+      };
+      nix.optimise.automatic = true;
+      nix.settings.min-free = 5 * 1024 * 1024 * 1024; # 5 GiB
+      nix.settings.max-free = 15 * 1024 * 1024 * 1024; # 15 GiB
       security.sudo.wheelNeedsPassword = false;
       environment.systemPackages = [ pkgs.gitMinimal ];
       system.stateVersion = "26.05";

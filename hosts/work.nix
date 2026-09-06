@@ -69,8 +69,9 @@ in
     enable = true;
     guest = self.nixosConfigurations.devvm;
 
-    # 8 GiB beside Docker Desktop's own 8 GiB VM on a 32 GB host, for as long
-    # as both run.
+    # 8 GiB: sized beside Docker Desktop's own VM and kept after its
+    # retirement — Docker ran on 8 for years, so this moves when something
+    # asks for more.
     memory = "8GiB";
 
     # One directory, at the identical path on both sides. Not ~ : this guest
