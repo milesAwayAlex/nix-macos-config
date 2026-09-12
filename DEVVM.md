@@ -220,6 +220,13 @@ the images and the disk sizes are honoured only at creation.
 
   then `just devvm-rebuild` again; from then on the installer keeps the
   partition at two pairs at most.
+- **`devvm-rebuild` ends with "Failed to start buildkitd.service" and exit
+  code 4, and the unit is fine a few seconds later.** A guest from before
+  buildkitd required its containerd unit: activation started the two
+  separately, buildkitd dialled a socket k3s had not created yet, and
+  `Restart` picked it up afterwards. Nothing is wrong with the switch, which
+  was applied; rebuilding onto a configuration with the requirement is the
+  fix, and that rebuild is the last one that can show it.
 - **`limactl shell` stops working after a rebuild.** `users.mutableUsers` went
   false and the rebuild deleted lima's user. Delete the instance and repeat
   bootstrap steps 2–3; the state disk survives.

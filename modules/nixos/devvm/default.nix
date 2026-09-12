@@ -375,24 +375,36 @@ in
       # `nerdctl build` needs buildkit, and buildkit has to be pointed at the
       # same containerd *and the same namespace*, or a built image lands where
       # the cluster cannot see it. nixpkgs has no module for it.
-      systemd.services.buildkitd = {
-        description = "BuildKit daemon, sharing containerd's content store";
-        wantedBy = [ "multi-user.target" ];
-        after = [ (if cfg.cluster.enable then "k3s.service" else "containerd.service") ];
-        serviceConfig = {
-          Type = "notify";
-          ExecStart = lib.concatStringsSep " " [
-            "${pkgs.buildkit}/bin/buildkitd"
-            "--oci-worker=false"
-            "--containerd-worker=true"
-            "--containerd-worker-addr=${socket}"
-            "--containerd-worker-namespace=${namespace}"
-          ];
-          # The socket it works through appears with k3s, not with us.
-          Restart = "always";
-          RestartSec = "5s";
+      systemd.services.buildkitd =
+        let
+          containerdUnit = if cfg.cluster.enable then "k3s.service" else "containerd.service";
+        in
+        {
+          description = "BuildKit daemon, sharing containerd's content store";
+          wantedBy = [ "multi-user.target" ];
+          # Requires as well as After: activation starts stopped units one at a
+          # time, each as its own job, and After alone orders nothing between
+          # separate jobs — a rebuild that changed both units started buildkitd
+          # before k3s and it died on a socket that did not exist yet. Requires
+          # pulls the containerd unit into buildkitd's own start, where the
+          # ordering holds.
+          requires = [ containerdUnit ];
+          after = [ containerdUnit ];
+          serviceConfig = {
+            Type = "notify";
+            ExecStart = lib.concatStringsSep " " [
+              "${pkgs.buildkit}/bin/buildkitd"
+              "--oci-worker=false"
+              "--containerd-worker=true"
+              "--containerd-worker-addr=${socket}"
+              "--containerd-worker-namespace=${namespace}"
+            ];
+            # For the case Requires does not cover: the containerd unit crashing
+            # and restarting itself takes the socket away and brings it back.
+            Restart = "always";
+            RestartSec = "5s";
+          };
         };
-      };
 
       # Only when nothing else brings one: k3s embeds its own.
       virtualisation.containerd.enable = !cfg.cluster.enable;
