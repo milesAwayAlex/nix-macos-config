@@ -195,6 +195,13 @@ let
   # forwarding and sent through ssh's own SendEnv instead — lima takes the ssh
   # command line from `$SSH` — which keeps it off every process list on the
   # way; the guest's sshd accepts exactly this name.
+  #
+  # Identity: `docker -v` answers as nerdctl, and that is load-bearing. kind's
+  # provider detection reads that first line, takes docker only when it says
+  # "Docker version", and asks `nerdctl -v` next — which is how kind on this
+  # Mac lands on the nerdctl provider by itself. A wrapper that faked the
+  # banner for some tool that sniffs it would send kind down the docker path
+  # onto nerdctl.
   shim =
     bin: target:
     pkgs.writeShellScriptBin bin ''
@@ -260,9 +267,21 @@ let
       ''}
 
       if [ "$status" != "Running" ]; then
-        echo "── cluster/containerd: instance is $status"
+        echo "── guest: instance is $status"
         exit 0
       fi
+
+      ${lib.optionalString (cfg.mount != null) ''
+        # lima-init mounts the share through /etc/fstab and a guest generation
+        # from before the activation remount lost it at every rebuild, for six
+        # days, silently.
+        echo "── share"
+        if limactl shell "$name" mountpoint -q ${cfg.mount} 2>/dev/null; then
+          echo "   ${cfg.mount}  mounted"
+        else
+          echo "   ${cfg.mount}  NOT mounted — \`just devvm-shell sudo systemctl restart lima-init\` (DEVVM.md, When it breaks)"
+        fi
+      ''}
 
       ${lib.optionalString roles.cluster.enable ''
         echo "── cluster"

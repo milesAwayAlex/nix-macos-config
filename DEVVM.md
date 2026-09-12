@@ -20,7 +20,7 @@ On the Mac:
 | `/etc/nix/machines`, `/etc/ssh/ssh_config.d/101-devvm.conf` | builder registration, and the `Host devvm` alias the daemon's ssh resolves | switch |
 | `~/.lima/devvm/` | lima's instance: OS disk, logs, `ssh.config`, and `copied-from-guest/kubeconfig.yaml` while the VM runs | `devvm-up` |
 | `~/.lima/_disks/devvm-state/` | the state disk | `devvm-up` |
-| `~/code-shared` | the one host directory the guest sees, at the same path on both sides | lima, on first start |
+| `~/code-shared` | the one host directory the guest sees, at the same path on both sides | lima-init at boot; the guest's activation puts it back after every switch |
 | `KUBECONFIG`, in every shell | `~/.kube/config` first, the copied kubeconfig second; the tools merge the list | switch |
 | `$TMPDIR/devvm-registry-auth/` | registry credentials that carry an expiry, one file per host, 0600, reused until they expire | the wrappers |
 
@@ -147,7 +147,12 @@ long as `devvm.dockerShims` is off for the host.
   containers see none of it unless passed with `-e`. `docker` and
   `docker-compose` as further wrappers are `devvm.dockerShims`, per host — with
   them on, every `docker` on the machine is nerdctl, so a machine that still
-  has Docker Desktop keeps them off.
+  has Docker Desktop keeps them off. kind works through them and picks its
+  nerdctl provider by itself, because `docker -v` answers as nerdctl
+  (verified with kind 0.31); `KIND_EXPERIMENTAL_PROVIDER=nerdctl` is the manual
+  override, unneeded today. The node container lives in k3s's namespace like
+  everything else, so under disk pressure the kubelet may evict its image and
+  the next run pulls it again.
 - **kubectl, k9s and kubectx** see the cluster as the context `devvm`.
   `KUBECONFIG` is set for every shell to `~/.kube/config` first and the copied
   file second, and the tools merge the list. Nothing is written into
@@ -258,6 +263,14 @@ the images and the disk sizes are honoured only at creation.
       ssh -F ~/.lima/devvm/ssh.config -O exit lima-devvm
 
   This closes every session riding on it, an open `just devvm-shell` included.
+- **The share is empty in the guest.** `ls ~/code-shared` lists files on the
+  Mac, `devvm-status` says `NOT mounted`, and a wrapper run from inside it
+  fails with `cd: … No such file or directory`. A guest generation from before
+  the activation remount: lima-init mounts the share through `/etc/fstab`,
+  which every switch regenerates and prunes, so it lived from boot until the
+  first rebuild. `just devvm-shell sudo systemctl restart lima-init` puts it
+  back now; a rebuild onto this configuration is the last one that can lose
+  it.
 - **`nerdctl login` fails with "registry logins live on the Mac".** By design:
   declare the host in `devvm.registryAuth` instead.
 - **`docker` behaves like nerdctl.** The shims are on for this host.

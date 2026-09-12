@@ -173,9 +173,32 @@ in
       # the `limactl shell` access along with it.
       users.mutableUsers = true;
 
-      # The host mount is written into /etc/fstab by lima-init from the seed's
-      # user-data, so it is deliberately absent from `fileSystems` — declaring
-      # it here would have NixOS and lima writing the same mount twice.
+      # The host mount is lima-init's, from the seed's user-data, and cannot be
+      # declared in `fileSystems`: the virtiofs tag is lima's sha256 over
+      # location, a NUL byte and mount point, and a Nix string cannot hold the
+      # NUL. lima-init mounts it by appending to /etc/fstab, a file NixOS
+      # generates — every switch compares the live file with the new one,
+      # unmounts what the new one lacks and puts the symlink back, so the share
+      # lived from boot until the first rebuild. Activation runs between that
+      # unmount and the unit starts, which is where this fits: mount whatever
+      # user-data lists and is not mounted. At boot the cidata volume is not
+      # mounted yet and lima-init does the work. A mount that fails fails the
+      # switch out loud. The parse is lima-init's own, so the two read one
+      # file the same way.
+      system.activationScripts.devvm-mounts.text = ''
+        userData=/mnt/lima-cidata/user-data
+        if [ -r "$userData" ]; then
+          ${lib.getExe pkgs.gawk} '
+            /^mounts:/ { flag = 1; next }
+            /^[^:]*:/ || /^ *$/ { flag = 0 }
+            flag { sub(/^ *- \[/, ""); sub(/"?\] *$/, ""); gsub("\"?, \"?", "\t"); print }
+          ' "$userData" |
+          while read -r tag dir type opts _; do
+            ${pkgs.util-linux}/bin/mountpoint -q "$dir" ||
+              ${pkgs.util-linux}/bin/mount -t "$type" -o "$opts" "$tag" "$dir"
+          done
+        fi
+      '';
 
       # Disk layout of the seed image, declared rather than inherited: the
       # first rebuild rewrites the bootloader config, and it has to describe

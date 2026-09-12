@@ -48,18 +48,10 @@ this repo or the Nix store (PLAN.md, principle 5).
 
 ## Per-machine manual steps
 
-Homebrew installs itself on the first switch (nix-homebrew owns the prefix),
-but a machine that already has apps in `/Applications` needs them adopted
-first, and Karabiner needs two approvals no configuration can grant. Both are
-in [BOOTSTRAP.md](BOOTSTRAP.md).
-
-After the first successful `just switch` on a new machine:
-
-    chsh -s /run/current-system/sw/bin/bash
-
-The switch itself registers nix bash in `/etc/shells`
-(`environment.shells`); the flip is the one step nix-darwin doesn't do for
-us. If `/run` is ever broken, `/bin/bash` remains the rescue shell.
+Everything the flake cannot do for itself — the installer and the first
+switch, adopting apps that predate the config, Karabiner's approvals, `chsh`,
+the input source, Touch ID, 1Password, browser sign-ins — is
+[BOOTSTRAP.md](BOOTSTRAP.md), in the order a fresh machine needs it.
 
 ## Consuming modules from another flake
 

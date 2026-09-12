@@ -4,7 +4,7 @@
 {
   nix.enable = true;
 
-  # The per-user flip is the manual step, once per machine (README):
+  # The per-user flip is the manual step, once per machine (BOOTSTRAP.md):
   # `chsh -s /run/current-system/sw/bin/bash`. If /run ever breaks,
   # /bin/bash remains the rescue shell.
   environment.shells = [ pkgs.bashInteractive ];

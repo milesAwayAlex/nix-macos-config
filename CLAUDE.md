@@ -65,7 +65,10 @@ Declarative macOS machine configuration: flake-based nix-darwin + home-manager (
   instance creation and does **not** move when `nix flake update nixos-lima`
   runs. Registry credentials are resolved on the Mac (`devvm.registryAuth`)
   and delivered to the guest per call; `nerdctl login` in the guest is refused
-  by design.
+  by design. The host share cannot be declared in the guest's `fileSystems`
+  (lima's virtiofs tag hashes a NUL-joined string Nix cannot spell): lima-init
+  mounts it through `/etc/fstab`, every switch prunes that file, and the
+  guest's `devvm-mounts` activation script mounts it back.
 - Redis and postgres are launchd user agents on the Mac, loopback only, data
   under `~/.local/share` (D24). nix-darwin's `services.postgresql` interpolates
   `dataDir` unquoted, so it can never point into `Application Support`. A

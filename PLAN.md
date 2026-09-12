@@ -32,7 +32,7 @@ principles here say *why*, that file says *how*.
 | Interpreter | Upstream CppNix, via `nix.enable = true` + `nix.package` | nix-darwin manages Nix itself; upgrades ride the rebuild train. Lix = one-line `nix.package` flip later. Determinate Nix rejected for now: proprietary nixd + `nix.*` carve-outs vs. our single-surface principle. |
 | System config | nix-darwin (flake-based) | `system.defaults`, launchd, activation scripts, homebrew driver. |
 | User config | home-manager **as nix-darwin module** | One command, one lock, one GC, atomic generations. Flip to standalone per-machine only if no-Touch-ID password friction grates (work machine candidate). |
-| nixpkgs | **26.05 release train**: `nixpkgs-26.05-darwin` + matched `nix-darwin-26.05` + HM `release-26.05`; weekly lock bumps via `update-flake-lock` action | Flipped from unstable 2026-08-15, pre-payload ("zero to unstable felt iffy"). Darwin-tested stable channel; train bump = twice-yearly deliberate chore (26.11 due ~Nov 2026; 26.05 EOL ~Dec 2026). Escape hatches: flip to unstable (3 input lines) if a forced macOS update needs master-only fixes; surgical secondary unstable input if package freshness hurts (Phase 4). |
+| nixpkgs | **26.05 release train**: `nixpkgs-26.05-darwin` + matched `nix-darwin-26.05` + HM `release-26.05`; lock bumps by hand (`just update`, D6) — the bot is backlog | Flipped from unstable 2026-08-15, pre-payload ("zero to unstable felt iffy"). Darwin-tested stable channel; train bump = twice-yearly deliberate chore (26.11 due ~Nov 2026; 26.05 EOL ~Dec 2026). Escape hatches: flip to unstable (3 input lines) if a forced macOS update needs master-only fixes; surgical secondary unstable input if package freshness hurts (Phase 4). |
 | GUI apps | Homebrew casks via nix-darwin + **nix-homebrew** (taps pinned as flake inputs, `autoMigrate` adopts existing install) | Casks for self-updating/permission-heavy apps; nixpkgs + mac-app-util for stable dev GUI (Alacritty). |
 | Spotlight/Dock fix | Built-in successors to mac-app-util, verified 2026-08-18 against 26.05 sources: HM `targets.darwin.copyApps` (default on `home.stateVersion` ≥ 25.11) copies `home.packages` apps to `~/Applications/Home Manager Apps`; nix-darwin copies `environment.systemPackages` apps to `/Applications/Nix Apps` | Real copies → Spotlight indexing, stable Dock pins, sane TCC. Caveat: updating an existing copied bundle may raise a one-time App Management permission prompt for the terminal running the switch. |
 | Secrets | 1Password-first runtime references (`op`, SSH agent); **nothing in repo/store**; sops-nix deferred until first server/VM | gitleaks pre-commit as seatbelt. Bitwarden = second domain; vaultwarden self-host option later. |
@@ -47,7 +47,7 @@ principles here say *why*, that file says *how*.
 
 | Alias | Hardware | Status |
 |---|---|---|
-| `work` | This laptop, MacBookPro18,2, macOS 15.7.7 (Sequoia), **MDM-managed**, Homebrew present | First target. Phase 0 MDM gate passed; Nix seeded 2026-08-15. |
+| `work` | This laptop, MacBookPro18,2, macOS 15.7.7 (Sequoia), **MDM-managed**, Homebrew present | First target. Phase 0 MDM gate passed; Nix seeded 2026-08-15; fully declared and in daily use since 2026-09-06 — brew holds three casks and no formulae, redis and postgres are nix services, the dev VM (Phase 8) has been in daily use since 2026-09-05. Converged 2026-09-12 (Phase 5 closed). |
 | `old` | Old laptop (personal), running its own flake-based nix-darwin + HM config | Host #2. **Live consumer since 2026-08-16**: imports `homeModules.karabiner` via `home-manager.sharedModules` (attrpath renamed per D8 — its flake adopts the new name at its next input bump). Full port into this repo = Phase 6. |
 
 Flake outputs are **alias-named** (`darwinConfigurations.work`, `.old`);
@@ -363,7 +363,7 @@ complete on 2026-08-21; the header waited on the gate.
 **Gate:** fresh terminal = fully configured bash/vim/tmux ☑; Alacritty from
 Spotlight ☑; `bash --version` ≥ 5 ☑. **Phase 4 complete 2026-08-20.**
 
-## Phase 5 — Converge and enforce ☐
+## Phase 5 — Converge and enforce — **complete 2026-09-12** ☑
 
 - [x] Reconcile Phase 0 inventory *(2026-08-21)*: everything brew carried is
       either declared here or consciously dropped, and
@@ -390,7 +390,7 @@ Spotlight ☑; `bash --version` ≥ 5 ☑. **Phase 4 complete 2026-08-20.**
       settles the sqlfluff dialect Phase 4 guessed at; a SQL language server
       was never evaluated and stays a Phase 4 leftover. Why the Mac rather
       than the guest or the cluster: D24.
-- [ ] Deletion pass, carried in
+- [x] Deletion pass *(done 2026-09-12)*, carried in
       from Phase 4 as one deletion pass: `~/configs` (all but `vimconf`, which
       backs the recovery vim), `~/.vim`, `~/.config/coc`, `~/.nvm`, brew's
       google-cloud-sdk, the manual Alacritty and hand-installed Hack TTFs, and
@@ -403,7 +403,36 @@ Spotlight ☑; `bash --version` ≥ 5 ☑. **Phase 4 complete 2026-08-20.**
       and in `~/configs` are gone *(2026-08-21)*: the Spacelift key rotated
       and moved behind `op run` (D20), the `ghp_` PAT removed, and gitleaks
       reports the legacy repo clean across both its working tree and all nine
-      of its commits.
+      of its commits. *Audit 2026-09-12, read-only.* Already gone from the
+      list above: `~/.config/coc`, `~/.nvm`, the manual Alacritty, Postgres.app
+      itself and its PATH line. Still there: `~/configs` and `~/.vim`, the two
+      symlinks (live until `configs` goes), the Hack TTFs (home-manager's copy
+      sits in `~/Library/Fonts/HomeManager`), the 14 cluster. One conflict in
+      the plan: `~/.vimrc` is the recovery vim's and references `~/.vim`
+      plugins 36 times, so it needs a plugin-free rewrite before `~/.vim`
+      goes. Found beyond the list, by size: `~/.tart` (116 GB — one Ventura VM
+      and its OCI cache, tart itself gone from PATH); Rancher Desktop's VM and
+      caches (~15 GB: `~/Library/Application Support/rancher-desktop`,
+      `~/Library/Caches/rancher-desktop{,-updater}`, `~/.rd`, `~/.kuberlr`,
+      the `rancher-desktop` kube context); Go with no toolchain (`~/go`,
+      `~/Library/Caches/go-build`, `~/Library/Caches/staticcheck`, ~14 GB);
+      Docker Desktop's remains (`~/.docker`, whose config may still hold
+      registry auth, `~/Library/Containers/com.docker.docker`,
+      `~/Library/Group Containers/group.com.docker`, `~/Library/Application
+      Support/Docker Desktop`, its plist); rustup with no rust declared
+      (`~/.rustup`, `~/.cargo`); pyenv holding only Python 2.7; the manual
+      deno install in `~/.deno` (nix's deno caches under `~/Library/Caches`);
+      tfswitch's terraform (`~/bin/terraform` → `~/.terraform.versions`;
+      `~/.terraform.d` holds only checkpoint files) — the repo declares tofu;
+      jenv pointing at a JDK that left with the temurin cask; sbt and Coursier
+      caches (`~/.sbt`, `~/.docker-cache`, `~/Library/Caches/Coursier`); the
+      manual `UTM.app` in `/Applications` beside home-manager's copy; the
+      Phase 0 `~/Brewfile`; three tmux logs from 2024; the empty
+      `~/.nix-defexpr`, `~/.homebrew`, `~/.ivy2`, `~/.spacelift`. Live but
+      prunable: npm's cache (3.4 GB), gcloud's logs (796 MB), brew's downloads
+      (604 MB), `~/.kube/cache`, pnpm's store (14 GB, `pnpm store prune`).
+      Kept on purpose: UTM's own VMs (20 GB), pgAdmin, Cursor, Slack, and the
+      zsh files the employer's endpoint tooling edits.
 - [x] Touch ID for sudo, `modules/darwin/pam.nix` *(2026-08-20)*:
       `touchIdAuth` plus `reattach`, the second because tmux's server sits in
       another bootstrap session and PAM cannot prompt it — without it nearly
@@ -422,16 +451,19 @@ Spotlight ☑; `bash --version` ≥ 5 ☑. **Phase 4 complete 2026-08-20.**
       deviation there is stock for this hardware. `just prefs-status` reads the
       declared set back out of its real domains, because these writes are
       one-way and a clean switch only proves they ran.
-- [ ] Finish `BOOTSTRAP.md`, the irreducible per-machine manual checklist.
-      Written so far: harness install and login, adopting pre-existing casks,
-      Karabiner's driver-extension and Input Monitoring approvals, fingerprint
-      enrollment, 1Password sign-in with its Touch ID unlock and agent, Slack. Still to add: nix
-      installer run, input source plus logout, `chsh`, browser sign-ins.
+- [x] `BOOTSTRAP.md` finished *(2026-09-12)*, and ordered: the installer and
+      the first switch (`darwin-rebuild` and `just` do not exist before it, so
+      the system is built from the lock and activated from inside the result),
+      cask adoption, Karabiner's approvals, `chsh`, the input source and the
+      logout it needs, fingerprint enrollment, 1Password's switches, the Chrome
+      sign-in and the extension's pairing, harness, Slack, and a pointer into
+      DEVVM.md. The README's own `chsh` paragraph moved there.
 - [x] README documents the appliance tier; secrets rules are in README and
       CLAUDE.md, and the gitleaks hook is verified by refusal test.
 
-**Gate:** zap-mode rebuild changes nothing; checklist tested mentally against a
-hypothetical fresh machine.
+**Gate:** a switch after the deletion pass changes nothing and `prefs-status`
+is clean; BOOTSTRAP.md read start to finish against a hypothetical fresh
+machine. *(zap stays off — D16; `cleanup = "uninstall"` is the drift detector.)*
 
 ## Phase 6 — Second host (`old`) ☐
 
@@ -512,7 +544,7 @@ Rationale and the rejected alternatives are in D21.
 **Gate:** an ad domain NXDOMAINs off-tunnel; on-tunnel resolution is unchanged;
 `.local` and Bonjour still work; DNS survives a blocky restart.
 
-## Phase 8 — Local Linux VM: builder, cluster, containers ☐
+## Phase 8 — Local Linux VM: builder, cluster, containers — **complete 2026-09-12** ☑
 
 One lima VM running a NixOS guest declared in this repo, filling three roles at
 once: the `aarch64-linux` remote builder, a k3s cluster, and the container
@@ -530,9 +562,11 @@ which mostly re-applies on restart. This repo owns the **inner OS** outright,
 rebuilt with `nixos-rebuild` any time. Keep the outer shape boring so it rarely
 needs recreating.
 
-*Status 2026-09-06:* built and in daily use since 2026-09-05. Every bullet
-below was implemented as written unless its text says otherwise; DEVVM.md is
-the operating manual, D22 and D23 the decisions.
+*Status 2026-09-12:* built and in daily use since 2026-09-05, complete
+2026-09-12. Every bullet below was implemented as written unless its text says
+otherwise; DEVVM.md is the operating manual, D22 and D23 the decisions. The
+last gate condition closed when a work repo's CI harness ran out of
+`~/code-shared` (see the gate).
 
 - [x] **Roles, so the guest can be less than all of it** *(2026-08-30)*.
       `devvm.builder`, `devvm.containers` and `devvm.cluster` as separate
@@ -717,29 +751,59 @@ the operating manual, D22 and D23 the decisions.
       and revisit. Written down now so the fallback is a decision already made
       rather than one made while frustrated. *Not needed: the seed booted
       under vz first time.*
+- [x] **The share survives rebuilds** *(2026-09-12)*. Found by the first CI
+      harness run out of `~/code-shared`: nixos-lima's lima-init mounts the
+      host directory by appending it to `/etc/fstab`, a file NixOS generates,
+      and every switch pruned it — the share had been gone since the rebuild
+      of 2026-09-06 and nothing reported it. `fileSystems` is not available:
+      the virtiofs tag is lima's sha256 over location, NUL, mount point, and a
+      Nix string cannot hold the NUL. Fixed with an activation script in the
+      guest (`devvm-mounts`) that mounts what user-data lists after the
+      switch's unmount, and a `share` line in `devvm-status`. The fix belongs
+      upstream — mount with `systemd-mount` instead of fstab — and is in the
+      backlog, not filed.
 
 **Gate:** `nix build --system aarch64-linux` succeeds from the Mac with no
 manual key step; `nerdctl compose up` runs a work repo out of `~/code-shared`;
 `k9s` reaches the cluster; an image built locally runs in it without a push; all
 of it survives a reboot. *2026-09-06: four of five hold — the builder ☑, k9s ☑,
 a local image in the cluster ☑, a reboot ☑. The compose condition waits for a
-work repo to live in `~/code-shared`; no rush.*
+work repo to live in `~/code-shared`; no rush.* *2026-09-12: the fifth holds ☑
+— a work repo's CI harness, kind on nerdctl through the wrappers, ran out of
+`~/code-shared` once the share fix landed. `nerdctl compose up` itself has not
+been run; it rides the same share, wrapper and daemon, so it is usage now
+rather than a gate.*
 
 
 ---
 
 ## Deferred backlog (designed, not scheduled)
 
-- **PR-guards pass**: `update-flake-lock` weekly bot (posture note: pair with
-  `cachix/install-nix-action` for upstream Nix, PR via
-  `peter-evans/create-pull-request`; GITHUB_TOKEN-created PRs don't trigger
-  workflows — needs a fine-grained PAT for CI-on-bot-PRs) + CI eval check
-  (`nix eval .#darwinConfigurations.<host>.system.drvPath` on ubuntu; optional
-  full build on free arm64 macos runners). GitHub-side hardening scoped
-  2026-08-18: pin third-party actions by commit SHA (+ flip the repo's
-  `sha_pinning_required` toggle), Dependabot version updates for the
-  `github-actions` ecosystem (it can't track flake.lock), required status
-  checks once the eval check exists, `deleteBranchOnMerge`.
+- **PR-guards pass** *(re-scoped 2026-09-12 and parked: it saves no work —
+  `just update && just check` is ten seconds, so a bot would pace and record,
+  not spare a step)*. When it is built: a CI workflow evaluating all three
+  configurations (`darwinConfigurations.work` and both `nixosConfigurations`;
+  about 12 s cold locally, a minute or two on ubuntu; nothing in the repo reads
+  a file outside itself at eval time) on push and PR, **advisory** — required
+  status checks would reject the direct pushes to `main` this repo runs on,
+  and guard only against merging a red PR nobody would merge. A weekly update
+  job that runs `nix flake update` bare (the matched trio, plus nix-homebrew
+  and nixos-lima, which move no other way), evaluates *before* it opens the
+  PR, then force-pushes one fixed branch and opens or refreshes the PR with
+  `git` and `gh` — no `update-flake-lock` or `create-pull-request` action, and
+  **no PAT**: the job's own token suffices once the repo allows Actions to
+  create PRs, and a PAT is a standing write credential to a repo that is root
+  on the Mac. The cost is no check mark on the PR; the eval result goes in the
+  body. Never auto-merge or auto-switch: `main` never holds a lock that has
+  not been switched on `work`. GitHub side: pin every action by SHA and flip
+  `sha_pinning_required` (gitleaks.yml is tag-pinned today), Dependabot for
+  `github-actions` grouped monthly (its PRs do trigger CI, and merging them
+  needs no switch), `deleteBranchOnMerge`. The eval workflow alone is the half
+  that stands on its own.
+- nixos-lima PR *(2026-09-12)*: lima-init should mount the host directories
+  with `systemd-mount` rather than append them to the generated `/etc/fstab`,
+  which every switch prunes (Phase 8). Once merged and pulled, delete the
+  guest's `devvm-mounts` activation script.
 - Case-sensitive APFS volume for code, for Linux parity and a tighter mount
   boundary — `diskutil apfs addVolume disk3 "Case-sensitive APFS" Code`, which
   costs nothing until used and has precedent on `work` in the Nix Store volume.
@@ -823,7 +887,7 @@ work repo to live in `~/code-shared`; no rush.*
 
 ## Risk register (from the pre-mortem)
 
-- Maintenance-to-benefit inversion → keep config boring, weekly bot PRs, graceful-abandonment design.
+- Maintenance-to-benefit inversion → keep config boring, a boring update rhythm, graceful-abandonment design. *The bot is parked (2026-09-12): it would pace and record, not save work. D6 pulls are manual — `just update`, `just check`, `just build`, `just switch`, then `just devvm-rebuild` — and the train crossing to 26.11 (~Nov 2026) is the next dated chore.*
 - macOS major releases break nix-darwin modules → never day-one upgrade macOS.
 - Declared-vs-actual drift (System Settings clicks) → periodic re-read; partial coverage is honest.
 - MDM conflict (work machine) → Phase 0 gate.
