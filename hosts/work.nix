@@ -43,8 +43,8 @@ in
   # Brew packages this machine keeps that are not part of the shared
   # appliance set. Empty today, and the list only matters once
   # `homebrew.onActivation.cleanup` is turned on — at which point anything
-  # unnamed is uninstalled. Manual installs (Docker, Rancher Desktop) have
-  # no brew receipt and are invisible to cleanup, so they need no entry.
+  # unnamed is uninstalled. Manual installs have no brew receipt and are
+  # invisible to cleanup, so they need no entry.
   homebrew.brews = [ ];
   homebrew.casks = [ ];
 

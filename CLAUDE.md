@@ -66,4 +66,9 @@ Declarative macOS machine configuration: flake-based nix-darwin + home-manager (
   runs. Registry credentials are resolved on the Mac (`devvm.registryAuth`)
   and delivered to the guest per call; `nerdctl login` in the guest is refused
   by design.
+- Redis and postgres are launchd user agents on the Mac, loopback only, data
+  under `~/.local/share` (D24). nix-darwin's `services.postgresql` interpolates
+  `dataDir` unquoted, so it can never point into `Application Support`. A
+  machine still running Postgres.app must stop it before the switch, or the
+  agent crash-loops on 5432 until it does.
 - The personal machine (`old`) consumes `homeModules.karabiner` (and optionally `darwinModules.input`) as a flake input; changes here reach it only via a deliberate `nix flake update nix-macos-config` there.

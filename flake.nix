@@ -61,6 +61,7 @@
           ./modules/darwin/homebrew.nix
           ./modules/darwin/input
           ./modules/darwin/pam.nix
+          ./modules/darwin/postgresql.nix
           ./modules/darwin/preferences.nix
           ./modules/darwin/redis.nix
           inputs.nix-homebrew.darwinModules.nix-homebrew
@@ -131,6 +132,7 @@
       darwinModules.homebrew = ./modules/darwin/homebrew.nix;
       darwinModules.input = ./modules/darwin/input;
       darwinModules.pam = ./modules/darwin/pam.nix;
+      darwinModules.postgresql = ./modules/darwin/postgresql.nix;
       darwinModules.preferences = ./modules/darwin/preferences.nix;
       darwinModules.redis = ./modules/darwin/redis.nix;
 

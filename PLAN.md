@@ -286,11 +286,12 @@ complete on 2026-08-21; the header waited on the gate.
       deno everywhere else. Formatting follows that split — a prettier in the
       repo's `node_modules` takes `,f` (its pinned version, its `.prettierrc`,
       and it echoes stdin back on ignored paths), otherwise the server does it.
-      Visual `,f` stays on the server, which handles ranges. SQL has no server
-      until the postgres slice; `gq` pipes through sqlfluff on the postgres
-      dialect, a guess to revisit. Node-based servers ship their own
-      `nodejs-slim`, independent of any project toolchain.
+      Visual `,f` stays on the server, which handles ranges. SQL has no
+      language server; `gq` pipes through sqlfluff on the postgres dialect,
+      the one database this machine runs (Phase 5). Node-based servers ship
+      their own `nodejs-slim`, independent of any project toolchain.
       Remaining: per-buffer LSP maps (`K` is global), completion tuning, a
+      SQL language server if one earns its place (none evaluated), a
       deliberate bindings and plugin-usage review once everything else
       settles, upstreaming yegappan/lsp to nixpkgs, and a notes/PKM step if
       the idea firms up (markdown-oxide is already the editor half; zk is the
@@ -376,12 +377,29 @@ Spotlight ☑; `bash --version` ≥ 5 ☑. **Phase 4 complete 2026-08-20.**
       declared service rather than a brew keeper (`modules/darwin/redis.nix`);
       its brew copy goes with the rest. `"zap"` stays off for the reason in
       D16.
+- [x] Postgres declared *(2026-09-06)*: `modules/darwin/postgresql.nix`, the
+      shape redis took. nix-darwin's `services.postgresql` at version 16 with
+      PostGIS and pgvector, because the work databases contain both (the rest
+      of what they use is contrib), trust on loopback, and the Postgres.app 16
+      cluster adopted by moving it to `~/.local/share/postgresql/16` — the
+      module interpolates the data directory unquoted, so the
+      `Application Support` path could not be used in place. Same major, so
+      no dump; PostGIS 3.4 → 3.6 and pgvector 0.7 → 0.8 load the old catalog
+      entries and take `ALTER EXTENSION … UPDATE` per database at leisure.
+      Postgres.app and its untouched 14 cluster join the deletion pass. This
+      settles the sqlfluff dialect Phase 4 guessed at; a SQL language server
+      was never evaluated and stays a Phase 4 leftover. Why the Mac rather
+      than the guest or the cluster: D24.
 - [ ] Deletion pass, carried in
       from Phase 4 as one deletion pass: `~/configs` (all but `vimconf`, which
       backs the recovery vim), `~/.vim`, `~/.config/coc`, `~/.nvm`, brew's
       google-cloud-sdk, the manual Alacritty and hand-installed Hack TTFs, and
       the dangling `~/git_completion` and `~/.alacritty.yml` symlinks — about
-      6 GB together. The credentials that used to sit in `~/.bashrc.local`
+      6 GB together. Added *(2026-09-06)*: `Postgres.app` (a login item; goes
+      with the bundle), its 14 cluster in `~/Library/Application
+      Support/Postgres/var-14` (840 MB, last started 2024) and the
+      `Postgres.app` PATH line in `~/.bashrc.local`, once the declared server
+      has run for a while — the app is the rollback until then. The credentials that used to sit in `~/.bashrc.local`
       and in `~/configs` are gone *(2026-08-21)*: the Spacelift key rotated
       and moved behind `op run` (D20), the `ghp_` PAT removed, and gitleaks
       reports the legacy repo clean across both its working tree and all nine
@@ -722,11 +740,6 @@ work repo to live in `~/code-shared`; no rush.*
   `sha_pinning_required` toggle), Dependabot version updates for the
   `github-actions` ecosystem (it can't track flake.lock), required status
   checks once the eval check exists, `deleteBranchOnMerge`.
-- Postgres from nixpkgs — the "postgres slice" the sqlfluff bullet in Phase 4
-  defers to, which also settles that linter's dialect and whether a SQL
-  language server is worth having. `Postgres.app` is a manual install with no
-  brew receipt, so it is invisible to brew cleanup and survives regardless.
-  Redis took this route already (`modules/darwin/redis.nix`).
 - Case-sensitive APFS volume for code, for Linux parity and a tighter mount
   boundary — `diskutil apfs addVolume disk3 "Case-sensitive APFS" Code`, which
   costs nothing until used and has precedent on `work` in the Nix Store volume.
@@ -745,9 +758,21 @@ work repo to live in `~/code-shared`; no rush.*
   per the Phase 8 note. lima's own `limactl start-at-login` does the same job
   imperatively by writing a plist into `~/Library/LaunchAgents` — the
   declarative version replaces it, and must not coexist with it. Rancher
-  Desktop, which contended for 6443, is gone *(2026-09-06)*; what remains to
-  decide is whether anything always-on lives in the VM, which is what would
-  make this necessary rather than convenient.
+  Desktop, which contended for 6443, is gone *(2026-09-06)*. Decided
+  *(2026-09-06)*: not until the cluster carries its first always-on workload.
+  Today nothing in the VM is needed before a terminal is open, so autostart
+  buys the absence of one command per boot for 8 GB committed from login; the
+  day a database or a daily service lives on the cluster it stops being
+  optional, and redis and postgres would move there together (D24). Two
+  details settled in advance. `KeepAlive` must be `{ SuccessfulExit = false; }`:
+  `limactl stop` ends the foreground hostagent cleanly and a plain `KeepAlive`
+  would restart it ten seconds later, undoing `just devvm-down`; `limactl
+  start` on a running instance returns success, so a manual start before the
+  agent's does not loop it. And `ExitTimeOut` must rise well above launchd's
+  20 s: at logout launchd sends SIGTERM and then kills, and the hostagent's
+  graceful guest shutdown takes longer than that with k3s up — which makes
+  this entry, once built, also the fix for the VM dying uncleanly at every
+  Mac restart today.
 - Registry-only service account for image pulls *(2026-09-05)*: the token the
   dev VM receives for `gcr.io` is the engineer's own, scoped `cloud-platform`.
   gcloud honours `auth/impersonate_service_account` everywhere, `config-helper`

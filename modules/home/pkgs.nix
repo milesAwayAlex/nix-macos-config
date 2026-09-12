@@ -15,7 +15,7 @@
     ripgrep
     shellcheck # also bundled into bash-language-server's wrapper
     shfmt
-    sqlfluff # SQL lint/format; no SQL language server until the postgres slice
+    sqlfluff # SQL lint/format on the postgres dialect; no SQL language server
     # The GitHub build of UTM carries no Sparkle updater, so a cask would
     # freeze it as surely as nix does — and nix at least moves it on a flake
     # update. HM links it into ~/Applications/Home Manager Apps.

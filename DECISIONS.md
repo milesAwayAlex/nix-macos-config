@@ -826,3 +826,32 @@ bought.
 **Revisit when.** A work repo needs something nerdctl cannot do, or the
 cluster's images and the development images want different lifetimes — then the
 registry fallback earns its three copies.
+
+## D24 — Development services are launchd user agents on the Mac *(2026-09-06)*
+
+**Decision.** The services the work code expects at their default ports —
+redis and postgres today — run on the Mac as nix-darwin services
+(`modules/darwin/redis.nix`, `modules/darwin/postgresql.nix`): launchd user
+agents with `KeepAlive`, bound to loopback, no passwords, data under
+`~/.local/share/<service>`, and the server log beside the data because launchd
+gives an agent nowhere else to write. nix-darwin's service modules are thin and
+tuned for a Linux daemon, so each needs the same handful of fixes — package,
+data directory, bind address — and those live in the module file with the
+reason for each, never in the host file.
+
+**Why.** The ergonomics of the manual installs they replaced (brew's redis,
+Postgres.app), which is what the code was written against: always on,
+`localhost:5432`, `psql` with no arguments, and the existing data directory
+adopted rather than dumped. Two alternatives were argued and lost. A NixOS
+`services.postgresql` in the guest has the richer module and Linux collation
+parity, but it is a third runtime beside launchd and kubernetes with nothing the
+other two lack once the data is in Linux anyway. The cluster is the right home
+for "services the machine provides" — k3s's manifests directory would declare
+them from this repo — and the wrong one today: it carries nothing daily, and a
+database in the VM makes the VM's autostart mandatory (PLAN.md backlog), a
+second change riding on the first. Rejected for now, not forever.
+
+**Revisit when.** The cluster gets its first always-on workload — then redis
+and postgres move together and autostart comes with them — or Linux parity
+bites on the Mac: a collation that sorts differently from Cloud SQL, or an
+extension nixpkgs cannot build for darwin.

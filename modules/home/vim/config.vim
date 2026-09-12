@@ -264,8 +264,8 @@ def g:HarperEnable()
 enddef
 command! Harper call g:HarperEnable()
 
-# No SQL language server until the postgres slice; until then gq pipes
-# through sqlfluff (dialect is a guess — revisit with postgres).
+# No SQL language server; gq pipes through sqlfluff on the postgres dialect,
+# the one database this machine runs (modules/darwin/postgresql.nix).
 # TS/JS in a node project formats through the repo's own prettier: the version
 # it pins, its .prettierrc, and safe on .prettierignore'd paths (prettier
 # echoes stdin back unchanged there). With no prettier installed, formatprg
