@@ -24,8 +24,8 @@ running Nix; the installer's remaining job is the uninstall receipt.
 
 ## Workflow
 
-Day-to-day operations are `just` recipes; the host is selected via `NIXHOST`
-(default `work`):
+Day-to-day operations are `just` recipes; the host comes from `NIXHOST`, which
+each configuration exports (BOOTSTRAP.md sets it once, before the first switch):
 
     just switch   # apply the configuration (sudo)
     just build    # build without activating; leaves ./result
@@ -50,7 +50,7 @@ this repo or the Nix store (PLAN.md, principle 5).
 
 Everything the flake cannot do for itself — the installer and the first
 switch, adopting apps that predate the config, Karabiner's approvals, `chsh`,
-the input source, Touch ID, 1Password, browser sign-ins — is
+the input source, Touch ID, the password manager, browser sign-ins — is
 [BOOTSTRAP.md](BOOTSTRAP.md), in the order a fresh machine needs it.
 
 ## Consuming modules from another flake

@@ -1,4 +1,7 @@
-host := env("NIXHOST", "work")
+# exported by each host's configuration; a machine that has not switched yet
+# sets it by hand (BOOTSTRAP.md). No default: a wrong host would check
+# silently.
+host := env("NIXHOST")
 
 # list recipes
 default:

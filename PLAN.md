@@ -48,11 +48,12 @@ principles here say *why*, that file says *how*.
 | Alias | Hardware | Status |
 |---|---|---|
 | `work` | This laptop, MacBookPro18,2, macOS 15.7.7 (Sequoia), **MDM-managed**, Homebrew present | First target. Phase 0 MDM gate passed; Nix seeded 2026-08-15; fully declared and in daily use since 2026-09-06 — brew holds three casks and no formulae, redis and postgres are nix services, the dev VM (Phase 8) has been in daily use since 2026-09-05. Converged 2026-09-12 (Phase 5 closed). |
-| `old` | Old laptop (personal), running its own flake-based nix-darwin + HM config | Host #2. **Live consumer since 2026-08-16**: imports `homeModules.karabiner` via `home-manager.sharedModules` (attrpath renamed per D8 — its flake adopts the new name at its next input bump). Full port into this repo = Phase 6. |
+| `personal` | Personal laptop, M4, 32 GB, macOS 15 (Sequoia), no Homebrew, Nix seeded by the earlier Determinate installer in its upstream mode | Host #2. Declared 2026-09-17 as a fresh configuration — the shared set plus `hosts/personal.nix` — not a port; its own flake (a `homeModules.karabiner` consumer since 2026-08-16) retires at the first switch. Phase 6. |
 
-Flake outputs are **alias-named** (`darwinConfigurations.work`, `.old`);
-`darwin-rebuild switch --flake ~/dotfiles#work` — hostname lookup is only a default.
-The justfile resolves the alias (env var `NIXHOST` or `hostname -s` mapping).
+Flake outputs are **alias-named** (`darwinConfigurations.work`, `.personal`),
+never hostnames — `work`'s is an employer asset name. Each configuration
+exports `NIXHOST` as its own alias, which is what the justfile reads; a machine
+sets it by hand once, before its first switch (BOOTSTRAP.md, D25).
 
 ---
 
@@ -171,13 +172,13 @@ unavoidable; type that password in QWERTY).
       chords (^I ^[ ^M ^H) unconditional, arrows excluded only in Alacritty,
       ^W restored, ^U reimplemented as native cmd+⌫; deliberate ctrl+cmd layer
       (cmd optional on i/m/h/b/p/n; excluded on f = fullscreen). Cheatsheet:
-      `KEYBOARD.md`. **Cross-machine reuse live**: `old` imports
-      `homeModules.karabiner` via `home-manager.sharedModules`.
+      `KEYBOARD.md`. **Cross-machine reuse live**: `personal`, then on its own
+      flake, imported `homeModules.karabiner` via `home-manager.sharedModules`.
 - [x] Pre-login remapping *(2026-08-17)*: activation copies the repo
       karabiner.json to `/Library/Application Support/org.pqrs/config/karabiner.json`
       — path confirmed empirically (the GUI "use before login" button created it,
       contents already identical to the repo). Activation owns the file now; the
-      GUI button is obsolete. Module exported as `darwinModules.input` for `old`.
+      GUI button is obsolete. Module exported as `darwinModules.input` for `personal`.
 - [x] Manual (on `work`: all pre-existing — extension + Input Monitoring
       approved in Phase 0, input source enabled). For fresh machines this
       checklist moves to `BOOTSTRAP.md` (Phase 5).
@@ -234,7 +235,7 @@ next natural reboot, no dedicated test needed.
       the path has a space in it and an unquoted directive makes ssh reject
       the whole config file. Switching the agent on in the app is a bootstrap
       step; until then ssh falls back to the keys on disk. Bitwarden is the
-      second domain and arrives with `old` in Phase 6.
+      second domain and arrives with `personal` in Phase 6.
       *(`op` itself: from nixpkgs, allowlisted in `hosts/work.nix` — D18.)*
 - [x] Harness bootstrap — manual, not activation. The
       native installer is a one-time step on a machine that needs an
@@ -315,8 +316,9 @@ complete on 2026-08-21; the header waited on the gate.
       default branch symbolically; wiki and projects disabled; secret scanning
       and push protection on (GitHub is the third seatbelt after hook and CI);
       Actions `GITHUB_TOKEN` read-only; sole collaborator, no deploy keys or
-      webhooks. Rest of the menu is the PR-guards pass in the backlog. For
-      Phase 6: check `old`'s flake input carries no `?ref=master`.
+      webhooks. Rest of the menu is the PR-guards pass in the backlog.
+      *(Phase 6 retires `personal`'s own flake, input and all, so the
+      `?ref=master` check on that input is moot.)*
 - [x] **tmux**: `programs.tmux` in `modules/home/tmux.nix` (exported as
       `homeModules.tmux`) — `tmux-256color`, truecolor via
       `terminal-features ",alacritty:RGB"`, focus-events on,
@@ -443,7 +445,7 @@ Spotlight ☑; `bash --version` ≥ 5 ☑. **Phase 4 complete 2026-08-20.**
       No MDM profile restricts biometrics on this machine.
 - [x] macOS preferences declared, `modules/darwin/preferences.nix`
       *(2026-08-25)*: 46 `system.defaults` keys plus the startup chime, chosen
-      from a full read of this machine merged with the `old` machine's existing
+      from a full read of this machine merged with the `personal` machine's existing
       `system` block. Small on purpose — of the 197 keys nix-darwin can type,
       only the ones that are a considered choice are declared. The rest are
       values macOS and System Settings write into their own domains, and the
@@ -465,27 +467,43 @@ Spotlight ☑; `bash --version` ≥ 5 ☑. **Phase 4 complete 2026-08-20.**
 is clean; BOOTSTRAP.md read start to finish against a hypothetical fresh
 machine. *(zap stays off — D16; `cleanup = "uninstall"` is the drift detector.)*
 
-## Phase 6 — Second host (`old`) ☐
+## Phase 6 — Second host (`personal`) ☐
 
-- [ ] Port the old laptop's existing nix-darwin + HM config into this repo as
-      `hosts/old.nix` (+ shared modules); `darwin-rebuild switch --flake .#old`.
-      Until then it consumes this repo's `homeModules.*` as a flake input.
-- [ ] Take `darwinModules.pam` here too — same sensor, same tmux problem.
-- [ ] Git commit signing over ssh, which lands with Bitwarden. Not a per-host
-      setting: `ssh-keygen -Y sign` reads `SSH_AUTH_SOCK` and ignores
-      `IdentityAgent` (D19). Two shapes are open — Bitwarden's agent on the
-      personal machine only, or a per-machine key in each manager signed
-      through `op-ssh-sign` on `work`; the second keeps a personal credential
-      store off employer-managed hardware. Either way, add a
-      signature-required rule to the GitHub ruleset when it lands.
-- [ ] Converge; **diff the two machines' experience** — every gap found is a repo
-      fix, not a local fix.
+A fresh configuration, not a port: the machine's own flake is discarded and it
+takes the shared set plus what only it knows. Shape settled 2026-09-17 — D25,
+and the dated addenda to D19 and D22.
 
-**Gate:** old laptop reaches declared state using only the repo + BOOTSTRAP.md.
+- [x] `hosts/personal.nix`, and `darwinConfigurations` as a map over the host
+      list *(2026-09-17)*: the common module list plus `hosts/<name>.nix`. The
+      host names its user once; the home path, `nix-homebrew.user`, the
+      home-manager user and `NIXHOST` derive from it, and the justfile lost
+      its `work` default. Postgres and redis moved into `work`'s imports,
+      gcloud and k8s into its `home-manager.sharedModules`.
+- [x] Per-host manager (D19) *(2026-09-17)*: the `bitwarden` cask, its Chrome
+      extension in the host's `ExtensionInstallForcelist` — the chrome module
+      keeps the manager-neutral baseline — and `modules/home/personal.nix`
+      with the agent socket. `iina` beside it; UTM and Alacritty from nix as
+      on `work`. Karabiner's hand install needs nothing: a pkg cask re-runs
+      the installer.
+- [x] Builder only *(2026-09-17)*: `devvm.guest = devvm-builder`, nested
+      virtualization on — the module's default, `work` opts out on its M1 — so
+      the guest has `/dev/kvm` and the builder advertises `kvm`, which
+      `runInLinuxVM` and every disk-image build through it require.
+- [x] State versions host-owned (D25) *(2026-09-17)*: 7 and 26.05 on
+      `personal`, from the maximum of the day; `work` keeps its own.
+- [x] `darwinModules.pam` — same sensor; it is in the common list.
+- [ ] First switch on the machine, from BOOTSTRAP.md, with the one-time
+      deletions around it (`deletions-personal.md`, untracked).
+- [ ] Converge; **diff the two machines' experience** — every gap found is a
+      repo fix, not a local fix.
+- Commit signing moved to the backlog *(2026-09-17)*: a key has to exist in
+  the vault before the config can name it.
+
+**Gate:** `personal` reaches declared state using only the repo + BOOTSTRAP.md.
 
 ## Phase 7 — Local resolver stack — **complete 2026-08-25** ☑
 
-Runs independently of Phases 5 and 6; `old` takes the same module. Source
+Runs independently of Phases 5 and 6; `personal` takes the same module. Source
 material was a NixOS `services.blocky` + `services.unbound` pair
 (`nixos-resolver-stack.nix`, untracked) — almost none of which ports. Settled
 shape after measuring on `work` *(2026-08-21)*: `dnsmasq :53` →
@@ -570,7 +588,7 @@ last gate condition closed when a work repo's CI harness ran out of
 
 - [x] **Roles, so the guest can be less than all of it** *(2026-08-30)*.
       `devvm.builder`, `devvm.containers` and `devvm.cluster` as separate
-      enables, because the three need not travel together — `old` may want only
+      enables, because the three need not travel together — `personal` wants only
       the builder. The consequence to design around is that containerd's socket
       becomes a computed value: with the cluster on it is k3s's, at
       `/run/k3s/containerd/containerd.sock` in namespace `k8s.io`; with
@@ -589,7 +607,7 @@ last gate condition closed when a work repo's CI harness ran out of
       32 GB) 6 vCPU and 8 GB — sized beside Docker Desktop's own 8 GB VM and kept
       there after Docker Desktop and Rancher Desktop were retired
       *(2026-09-06)*: Docker ran on 8 for years, so it moves when something
-      asks for more; `old` is smaller. Whatever launchd job starts the VM must not be
+      asks for more; `personal` takes 4 and 8 for a builder alone. Whatever launchd job starts the VM must not be
       `ProcessType = "Background"` — that confines a job to the efficiency
       cores and throttles its I/O. `Standard` is right; `Interactive` would
       fight the desktop for performance cores. nix-darwin's own linux-builder
@@ -779,6 +797,16 @@ rather than a gate.*
 
 ## Deferred backlog (designed, not scheduled)
 
+- **Commit signing over ssh** *(moved out of Phase 6, 2026-09-17: it needs a
+  key that exists in the vault first)*. Lands with Bitwarden. Not a per-host
+  ssh setting: `gpg.format = ssh` makes git shell out to `ssh-keygen -Y sign`,
+  which reads `SSH_AUTH_SOCK` and ignores `IdentityAgent` (D19), so the
+  signing program is a wrapper that points that variable at the manager's
+  socket. Two shapes are open — Bitwarden's agent on `personal` only, or a
+  per-machine key in each manager with `op-ssh-sign` on `work`; the second
+  keeps a personal credential store off employer-managed hardware. The
+  signature-required rule on the GitHub ruleset waits until every machine
+  that pushes signs, or its own pushes are refused.
 - **PR-guards pass** *(re-scoped 2026-09-12 and parked: it saves no work —
   `just update && just check` is ten seconds, so a bot would pace and record,
   not spare a step)*. When it is built: a CI workflow evaluating all three

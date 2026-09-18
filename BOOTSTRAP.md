@@ -13,7 +13,8 @@ without it.
 5. [Login shell](#login-shell) — `chsh`, once.
 6. [Input source](#input-source) — log out once, add the layout.
 7. [Touch ID](#touch-id) — enroll a fingerprint.
-8. [1Password](#1password) — sign in, three switches.
+8. [1Password](#1password) on `work`, [Bitwarden](#bitwarden) on `personal` —
+   sign in, the switches.
 9. [Browsers](#browsers) — sign in to Chrome; the extension pairs with the app.
 10. [AI harness](#ai-harness) and [Slack](#slack) — native installers, logins.
 11. [Dev VM](#dev-vm) — DEVVM.md takes over.
@@ -50,18 +51,23 @@ git config core.hooksPath .githooks   # until the managed git config takes over 
 
 Adopt any pre-existing casks first (next section). Then the first switch.
 `darwin-rebuild` and `just` do not exist yet — both arrive with it — so build
-the system from the lock and run the copy inside the result:
+the system from the lock and run the copy inside the result. `NIXHOST` is how
+the justfile knows which machine this is; the configuration exports it from
+this switch on, so it is set by hand exactly once, here:
 
 ```sh
-nix build .#darwinConfigurations.work.system
-sudo ./result/sw/bin/darwin-rebuild switch --flake .#work
+export NIXHOST=work   # or personal
+nix build .#darwinConfigurations.$NIXHOST.system
+sudo ./result/sw/bin/darwin-rebuild switch --flake .#$NIXHOST
 ```
 
 `sudo` wants the password here; Touch ID for sudo is part of what is being
 installed. This switch also installs Homebrew itself and the casks. From the
-second one on it is `just switch`. A new host needs its `hosts/<name>.nix` and
-a `darwinConfigurations.<name>` entry, `git add`ed before any of this — flakes
-do not see untracked files.
+second one on it is `just switch`. A machine that already runs nix-darwin has
+a `darwin-rebuild`, but the copy inside the result is the version the lock
+names, so the same lines apply. A new host needs its `hosts/<name>.nix` and
+its name in the flake's host list, `git add`ed before any of this — flakes do
+not see untracked files.
 
 ## Homebrew
 
@@ -133,12 +139,13 @@ stack is inert and sudo simply asks for the password as before.
 **Autofilling passwords** is the toggle in that pane that governs macOS' own
 AutoFill path — the Passwords app, Safari, and any third-party provider
 registered under General → AutoFill & Passwords, which 1Password does ship one
-for. Nothing here uses that path: the Chrome extension reaches the desktop app
-over 1Password's own channel and is gated by 1Password's Touch ID setting
+for. Nothing here uses that path: each Chrome extension reaches its desktop app
+over the manager's own channel and is gated by that app's Touch ID setting
 instead. Off only means that path would ask for the account password rather than
 a fingerprint; it disables nothing.
 
-The same enrollment backs 1Password's biometric unlock and, through it, `op`.
+The same enrollment backs the manager's biometric unlock — 1Password's and,
+through it, `op` on `work`; Bitwarden's on `personal`.
 
 Check it from **inside tmux** once the switch has gone in — `sudo -k && sudo -v`
 should raise the Touch ID prompt rather than ask for a password. That path is
@@ -147,8 +154,8 @@ either way.
 
 ## 1Password
 
-The cask installs the app; the rest is a login and three switches, which live in
-two different panes of the app's own settings:
+`work`'s manager (D19). The cask installs the app; the rest is a login and three
+switches, which live in two different panes of the app's own settings:
 
 1. **Security → Unlock using Touch ID.** Gates everything below — without it the
    vault, the agent's approval prompts and `op` all fall back to typing the
@@ -165,17 +172,44 @@ key item. `modules/home/work.nix` already includes that path, so the manual
 `Include` the app asks for is not needed — but the bookmarks themselves are
 per-account and made by hand, one per host.
 
+## Bitwarden
+
+`personal`'s manager (D19). The cask installs the desktop app and the Chrome
+policy force-installs the extension; the app is what serves ssh and what lets
+the extension unlock by Touch ID, so it comes first. Sign in to it, then in its
+own Settings:
+
+1. **Security → Unlock with Touch ID.** Needs a fingerprint already enrolled
+   ([Touch ID](#touch-id)). **Ask for Touch ID on app start** is optional.
+2. **Security → Require verification for browser integration** — optional and
+   worth taking: each pairing of the extension with the app then shows a
+   fingerprint phrase on both sides to compare.
+3. **Enable SSH agent** — creates `~/.bitwarden-ssh-agent.sock`, the path
+   `modules/home/personal.nix` names as `IdentityAgent`. Until it is on, ssh
+   warns once and falls back to the keys on disk. **Ask for authorization when
+   using SSH agent** sets how often a signature asks.
+
+Then the extension, signed in to the same account: **Settings → Account
+security → Unlock with biometrics**. Chrome asks once to let the extension
+communicate with cooperating native applications — allow — and the app confirms
+the pairing. The agent answers only while the app runs and the vault has been
+unlocked once since launch; locked, it prompts to unlock, then to authorize.
+
+Keys are vault items of the SSH key type, made or imported in the app. The keys
+on disk stay until each has a vault entry. Commit signing is backlog (PLAN.md).
+
 ## Browsers
 
 Chrome is the declared browser (cask), and `modules/darwin/chrome.nix` writes
-its policy at the first switch: the 1Password extension force-installed,
-Chrome's own password manager and autofill off. `chrome://policy` shows the
-baseline before any sign-in. What remains is per-account: sign in to the Google
-Workspace profile (sync is a per-profile choice the policy leaves alone), and
-let the extension pair — on its first use the 1Password app asks once to trust
-the browser, and from then on the extension unlocks with the app, by Touch ID
-once the switch in the [1Password](#1password) section is on. Firefox is not
-installed and has no step; its declared form is in the PLAN backlog.
+its policy at the first switch: the host's password-manager extension
+force-installed (1Password on `work`, Bitwarden on `personal`), Chrome's own
+password manager and autofill off. `chrome://policy` shows the baseline before
+any sign-in. What remains is per-account: sign in to the profile (sync is a
+per-profile choice the policy leaves alone), and let the extension pair with
+its app — 1Password asks once to trust the browser; Bitwarden's pairing is the
+biometrics switch in its section. From then on the extension unlocks with the
+app, by Touch ID once the app's own switch is on. Firefox is not installed and
+has no step; its declared form is in the PLAN backlog.
 
 ## AI harness
 
@@ -205,3 +239,6 @@ interactive workspace login before it does anything (D17). Install from
 
 `just devvm-up` and everything after it — the seed boot, the first
 `just devvm-rebuild`, `just devvm-adopt` — is [DEVVM.md](DEVVM.md), "Bootstrap".
+`personal` runs the builder-only guest, so the steps about the share, the shims
+and the cluster do not apply there; up, rebuild, adopt and check are the same
+four.

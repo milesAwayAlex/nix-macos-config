@@ -54,9 +54,10 @@
 
     # Nothing from a third-party tap: Homebrew 6.0 requires those to be
     # trusted before it will load them (nix-homebrew's `trust.taps`), and the
-    # appliance set has no reason to leave the default tap.
+    # appliance set has no reason to leave the default tap. The password
+    # manager's cask is per host (D19) and sits in hosts/ beside its extension
+    # and its agent socket.
     casks = [
-      "1password" # browser integration and system auth verify the real bundle
       "google-chrome"
       "karabiner-elements" # the official pqrs .pkg; nixpkgs' own is rejected in D16
     ];

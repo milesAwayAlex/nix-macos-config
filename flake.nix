@@ -50,35 +50,53 @@
       pkgs = nixpkgs.legacyPackages.${system};
     in
     {
-      darwinConfigurations.work = nix-darwin.lib.darwinSystem {
-        # `self` so a host can name the guest it runs (`devvm.guest`).
-        specialArgs = { inherit self; };
-        modules = [
-          ./modules/darwin/core.nix
-          ./modules/darwin/chrome.nix
-          ./modules/darwin/devvm.nix
-          ./modules/darwin/dns.nix
-          ./modules/darwin/homebrew.nix
-          ./modules/darwin/input
-          ./modules/darwin/pam.nix
-          ./modules/darwin/postgresql.nix
-          ./modules/darwin/preferences.nix
-          ./modules/darwin/redis.nix
-          inputs.nix-homebrew.darwinModules.nix-homebrew
-          ./hosts/work.nix
-          home-manager.darwinModules.home-manager
-          {
-            home-manager.useGlobalPkgs = true;
-            home-manager.useUserPackages = true;
-            home-manager.users.alexm = import ./modules/home;
-            # vim.nix takes the plugin source as a module arg (D11);
-            # consumers of homeModules.vim pass their own.
-            home-manager.extraSpecialArgs = {
-              vim9-lsp = inputs.vim9-lsp;
-            };
-          }
-        ];
-      };
+      # One entry per Mac, keyed by the alias it is switched as
+      # (`--flake .#<name>`), never a hostname. The common list is every module
+      # both machines run; `hosts/<name>.nix` states what only that machine
+      # knows and imports what only it runs (D25).
+      darwinConfigurations = nixpkgs.lib.genAttrs [ "work" "personal" ] (
+        name:
+        nix-darwin.lib.darwinSystem {
+          # `self` so a host can name the guest it runs (`devvm.guest`).
+          specialArgs = { inherit self; };
+          modules = [
+            ./modules/darwin/core.nix
+            ./modules/darwin/chrome.nix
+            ./modules/darwin/devvm.nix
+            ./modules/darwin/dns.nix
+            ./modules/darwin/homebrew.nix
+            ./modules/darwin/input
+            ./modules/darwin/pam.nix
+            ./modules/darwin/preferences.nix
+            inputs.nix-homebrew.darwinModules.nix-homebrew
+            ./hosts/${name}.nix
+            home-manager.darwinModules.home-manager
+            (
+              { config, ... }:
+              let
+                user = config.system.primaryUser;
+              in
+              {
+                # The host names its user once; everything else is spelled
+                # from it, so no file carries a second copy (D25).
+                users.users.${user}.home = "/Users/${user}";
+                nix-homebrew.user = user;
+                home-manager.useGlobalPkgs = true;
+                home-manager.useUserPackages = true;
+                home-manager.users.${user} = import ./modules/home;
+                # vim.nix takes the plugin source as a module arg (D11);
+                # consumers of homeModules.vim pass their own.
+                home-manager.extraSpecialArgs = {
+                  vim9-lsp = inputs.vim9-lsp;
+                };
+                # What the justfile reads to pick the host. Set by hand once,
+                # before a machine's first switch (BOOTSTRAP.md).
+                environment.variables.NIXHOST = name;
+              }
+            )
+          ];
+        }
+      );
 
       # The development VM's guest OS (Phase 8, D22): a product, independent of
       # any Mac. Two role sets, and a Mac names the one it runs in `devvm.guest`.
@@ -108,8 +126,7 @@
             devvm-builder = { };
           };
 
-      # Portable modules, exported so other flakes (the `old` machine,
-      # pre-Phase-6) can consume them as an input.
+      # Portable modules, exported by class (D8) for other flakes to consume.
       homeModules.alacritty = ./modules/home/alacritty.nix;
       homeModules.bash = ./modules/home/bash;
       homeModules.gcloud = ./modules/home/gcloud.nix;
@@ -121,6 +138,7 @@
       homeModules.karabiner = ./modules/home/karabiner;
       homeModules.node = ./modules/home/node.nix;
       homeModules.packages = ./modules/home/pkgs.nix;
+      homeModules.personal = ./modules/home/personal.nix;
       homeModules.ssh = ./modules/home/ssh.nix;
       homeModules.tmux = ./modules/home/tmux.nix;
       homeModules.vim = ./modules/home/vim;

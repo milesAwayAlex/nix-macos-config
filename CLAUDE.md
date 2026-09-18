@@ -11,7 +11,7 @@ Declarative macOS machine configuration: flake-based nix-darwin + home-manager (
 
 ## Workflow
 
-- `just switch` / `build` / `check` / `update [input]` / `gc`. Host resolved via `NIXHOST` (default `work`). Rebuilds are deliberate events; sudo authenticates by Touch ID (`modules/darwin/pam.nix`), falling back to the password prompt; NOPASSWD never will be.
+- `just switch` / `build` / `check` / `update [input]` / `gc`. Host resolved via `NIXHOST`, which each host's configuration exports; before a machine's first switch, set it by hand. Rebuilds are deliberate events; sudo authenticates by Touch ID (`modules/darwin/pam.nix`), falling back to the password prompt; NOPASSWD never will be.
 - Flakes cannot see untracked files — `git add` new files before any flake command, or the eval fails confusingly.
 - The gitleaks pre-commit hook is versioned in `.githooks/` and activates automatically on HM-configured machines via the `hasconfig` include in `modules/home/git.nix` (D7/D9); on machines without this HM config, activate per clone: `git config core.hooksPath .githooks`.
 
@@ -34,9 +34,10 @@ Declarative macOS machine configuration: flake-based nix-darwin + home-manager (
 - Unfree packages need their name in the `allowUnfreePredicate` list in
   `hosts/work.nix` (D18). It cannot go in a home module: `useGlobalPkgs = true`
   drops home-manager's `nixpkgs.*` module outright, so `nixpkgs.config` is not
-  an option that exists there. Employer-coupled home modules are imported from
-  the same host file for the same reason — `home-manager.users.alexm.imports`
-  merges cleanly with the assignment in `flake.nix` (verified).
+  an option that exists there. Host-coupled home modules — the employer's, a
+  password manager's — and `home.stateVersion` go through
+  `home-manager.sharedModules` in the host file (D25), so no file restates the
+  username.
 - `system.defaults` is write-only (`modules/darwin/preferences.nix`): one
   `defaults write` per key at activation, never read back, so removing a key
   stops the write but leaves the value on the machine, and nothing is enforced
@@ -74,4 +75,4 @@ Declarative macOS machine configuration: flake-based nix-darwin + home-manager (
   `dataDir` unquoted, so it can never point into `Application Support`. A
   machine still running Postgres.app must stop it before the switch, or the
   agent crash-loops on 5432 until it does.
-- The personal machine (`old`) consumes `homeModules.karabiner` (and optionally `darwinModules.input`) as a flake input; changes here reach it only via a deliberate `nix flake update nix-macos-config` there.
+- Two hosts, `work` and `personal`, share the module set; `hosts/<name>.nix` states only what that machine alone knows (D25). The password manager is per host (D19): its cask, its Chrome extension and its agent socket sit together — 1Password on `work`, Bitwarden on `personal`.

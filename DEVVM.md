@@ -4,7 +4,7 @@ One lima instance, `devvm`, whose guest OS is one of two role sets this flake
 exports as `nixosConfigurations`: `devvm` — the `aarch64-linux` builder the nix
 daemon on the Mac uses, a containerd with nerdctl and buildkit, and a k3s
 cluster — and `devvm-builder`, the first alone. The Mac names the one it runs
-in its host file. The why is PLAN.md Phase 8 and D22/D23. This is the operating manual for both
+in its host file: `work` runs `devvm`, `personal` the builder alone. The why is PLAN.md Phase 8 and D22/D23. This is the operating manual for both
 halves — `modules/nixos/devvm` (the guest) and `modules/darwin/devvm.nix` (the
 host) — and for the `just devvm-*` recipes over them.
 
@@ -35,7 +35,8 @@ In the guest:
   holds what should outlive the OS disk: `ssh/` (sshd's host keys and the
   `builder` user's authorized key) and `rancher/`, bind-mounted onto
   `/var/lib/rancher`, which is k3s's data and the single containerd content
-  store behind nerdctl, buildkit and the cluster alike. The guest formats it
+  store behind nerdctl, buildkit and the cluster alike; a builder-only guest
+  keeps `ssh/` and nothing else. The guest formats it
   once, on the first boot of this configuration, and refuses any device that
   already carries a signature.
 - Everything else is a NixOS generation.
@@ -43,7 +44,9 @@ In the guest:
 ## Bootstrap, once per machine
 
 Every step has a check, nothing before step 3 changes the guest, and all of it
-is reversible ("Removing it", below).
+is reversible ("Removing it", below). On a builder-only host (`personal`) the
+share, the shims, the cluster and everything said about them below do not
+apply; the four steps are the same.
 
 Before starting: Rancher Desktop must not be running. Its k3s forwards 6443 to
 localhost exactly as this one will, and the loser gets a TLS error against the
@@ -192,11 +195,12 @@ the images and the disk sizes are honoured only at creation.
 | Change | Where | Then |
 |---|---|---|
 | Anything in the guest's NixOS config | `modules/nixos/devvm` | `just devvm-rebuild` |
-| Which role set this Mac runs (`devvm.guest`) | `hosts/work.nix` | `just switch`, then `just devvm-rebuild .#<name>` once — the hostname follows the attribute from there; the template's kubeconfig copy follows the cluster role, so re-sync the instance copy as above |
+| Which role set this Mac runs (`devvm.guest`) | `hosts/<host>.nix` | `just switch`, then `just devvm-rebuild .#<name>` once — the hostname follows the attribute from there; the template's kubeconfig copy follows the cluster role, so re-sync the instance copy as above |
 | A role set that does not exist yet | `flake.nix`, one line | as above |
-| CPUs, memory, the shared directory | `hosts/work.nix` (`devvm.*`, beside the shims) | `just switch`, re-sync the instance copy, start |
-| A registry host, or how its credential is made | `hosts/work.nix` (`devvm.registryAuth`) | `just switch`; a guest from before the credential store needs one `just devvm-rebuild` |
-| ssh port | `hosts/work.nix` | the same, and both sides before the next start: the daemon's alias and the instance must agree |
+| CPUs, memory, the shared directory | `hosts/<host>.nix` (`devvm.*`, beside the shims) | `just switch`, re-sync the instance copy, start |
+| Nested virtualization (`devvm.nestedVirtualization`; M3 and later, on by default) | `hosts/<host>.nix` | a template key: `just switch`, re-sync the instance copy, start. The builder's `kvm` feature follows it at the switch, and only a guest with `/dev/kvm` can honour it |
+| A registry host, or how its credential is made | `hosts/<host>.nix` (`devvm.registryAuth`) | `just switch`; a guest from before the credential store needs one `just devvm-rebuild` |
+| ssh port | `hosts/<host>.nix` | the same, and both sides before the next start: the daemon's alias and the instance must agree |
 | Seed image or `vmType` | `modules/darwin/devvm.nix` | `just devvm-down`, `limactl delete devvm`, then bootstrap steps 2–3 again. The state disk carries both keys, so no adopt, and the cluster comes back |
 | `nix flake update nixos-lima` | `flake.lock` | `just devvm-rebuild`; the guest protocol module moves, the seed digest does not, and it only matters at the next creation |
 | The state disk itself | — | `limactl disk delete devvm-state` with the instance stopped: new host key and an empty cluster, so `just devvm-adopt` again |

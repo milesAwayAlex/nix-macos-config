@@ -49,6 +49,10 @@ first install); usernames can differ; shared policy in one place prevents
 copy-paste drift, and `mkDefault` keeps a host override one plain assignment
 away.
 
+*2026-09-17:* D25 sharpens this — the home path and the home-manager user are
+derived from `system.primaryUser` rather than stated, and `home.stateVersion`
+joins the list.
+
 **Revisit when.** A third host class appears (Linux metal/VM) and the split
 needs another layer.
 
@@ -182,7 +186,7 @@ module with `vimUtils.buildVimPlugin`. The module stays a regular path
 export (`homeModules.vim`) and takes the plugin source as a module arg;
 each consuming flake supplies it via home-manager's `extraSpecialArgs`
 (`vim9-lsp = inputs.vim9-lsp;`). A consumer of the export reaches the
-exact pinned source transitively — on `old`:
+exact pinned source transitively — on `personal`, when it ran its own flake:
 `inputs.nix-macos-config.inputs.vim9-lsp`. Bumping is `just update
 vim9-lsp`.
 
@@ -196,9 +200,11 @@ but made vim a special case among otherwise-uniform path exports; one
 visible arg line per consumer is more transparent than one invisible
 wrapper.
 
+*2026-09-17:* `personal` is in this flake (Phase 6), so the consumer path
+above is history; the arg line stays as the export's contract.
+
 **Revisit when.** The plugin lands in nixpkgs (upstreaming intent noted in
-PLAN, after the dust settles), `old` is adopted into this flake (Phase 6 —
-both futures are intended), or the pattern multiplies — several
+PLAN, after the dust settles), or the pattern multiplies — several
 arg-taking modules would argue for an overlay instead.
 
 ## D12 — Runtimes and cloud CLIs are declared, not version-managed *(2026-08-20)*
@@ -505,6 +511,14 @@ machine-local state: on a machine where the bookmarks have not been recreated
 the `Include` resolves to nothing and ssh goes back to offering every key.
 Graceful, but not a guarantee the flake can make.
 
+*2026-09-17:* Bitwarden lands on `personal` as decided: the desktop app from
+its cask, the `Host *` `IdentityAgent` in `modules/home/personal.nix` at the
+direct-download build's socket. The browser extension follows the manager per
+host — `modules/darwin/chrome.nix` carries the manager-neutral baseline, and
+each host adds its extension to `ExtensionInstallForcelist` in the same
+domain; the definitions merge, and a clash on one key would fail the eval.
+Signing waits for a key that exists in the vault (PLAN.md backlog).
+
 **Revisit when.** Two managers hold keys on one machine — then `Host *`
 becomes the personal default and work hosts get named blocks.
 
@@ -745,6 +759,15 @@ imperatively on every boot, and a rebuild without it deletes that user and the
 must be *added to*, never replaced — the module's own
 `/etc/ssh/authorized_keys.d/%u` is where lima writes its user's key.
 
+*2026-09-17:* `devvm.nestedVirtualization`, on by default, sets lima's key of
+the same name and adds `kvm` to the builder's advertised features. Apple
+Virtualization nests from M3 on, and only then does the guest have `/dev/kvm`
+— which `runInLinuxVM`, and every disk-image build through it, require. The
+feature is advertised only where it is true: nix schedules by the machines
+file, the guest's daemon detects the device on its own, and a promise the
+guest cannot keep fails the build there instead of refusing it here. `work`
+opts out on its M1; the default is on because the next machine will not.
+
 **Revisit when.** A machine wants a role set neither output has — a third line
 in the flake, and the question of whether the sets should be composed there
 rather than enumerated. Or nix-darwin's linux-builder stops putting a private
@@ -855,3 +878,33 @@ second change riding on the first. Rejected for now, not forever.
 and postgres move together and autostart comes with them — or Linux parity
 bites on the Mac: a collation that sorts differently from Cloud SQL, or an
 extension nixpkgs cannot build for darwin.
+
+## D25 — Host identity is the host file's: user, platform, state versions *(2026-09-17)*
+
+**Decision.** `hosts/<name>.nix` states what only that machine knows, and
+nothing twice: `nixpkgs.hostPlatform`, `system.primaryUser` once,
+`system.stateVersion`, and `home.stateVersion` through
+`home-manager.sharedModules` — beside the darwin modules only that host runs
+(imported there) and the home modules only it takes (in the same
+`sharedModules` list). `darwinConfigurations` is a map over the host names;
+the common block derives the home path, `nix-homebrew.user`, the home-manager
+user and `environment.variables.NIXHOST` from the name and the primary user.
+Both state versions are set from the maximum of the day at a host's first
+install and never moved, so a new machine starts current while the existing
+ones keep theirs.
+
+**Why.** D3 put identity in the host file; what it left were a username spelled
+in the flake, a `home.stateVersion` in the shared home entry point, and a
+justfile defaulting to `work`. Each was a second copy of a host fact — restated,
+it drifts, and on the wrong machine a default checks the wrong configuration
+without saying so. `sharedModules` is the host-level hook that needs no
+username. `NIXHOST` from the configuration means the justfile never guesses;
+a machine before its first switch exports it by hand (BOOTSTRAP.md), and that
+is the whole cost. State versions gate defaults for data already on disk,
+which is exactly what a fresh machine does not have — so it takes the current
+ones, and an existing machine's never move because moving them is what
+changes data.
+
+**Revisit when.** A host wants a second user — the derivations from
+`primaryUser` stop being the whole story — or nix-darwin learns to name the
+flake attribute of the running system, which would retire `NIXHOST`.

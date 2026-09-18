@@ -47,6 +47,7 @@ let
       # emulation layer to pay for on aarch64 hosting aarch64.
       vmType = "vz";
       arch = "aarch64";
+      nestedVirtualization = cfg.nestedVirtualization;
 
       # Seed only. lima reads `images` when it *creates* the instance and never
       # again; the first `nixos-rebuild` inside the guest replaces the entire
@@ -227,7 +228,6 @@ let
     ];
     text = ''
       name=${name}
-      kubeconfig="${kubeconfig}"
 
       echo "── instance"
       if ! limactl list --format '{{.Name}}' 2>/dev/null | grep -qx "$name"; then
@@ -284,6 +284,9 @@ let
       ''}
 
       ${lib.optionalString roles.cluster.enable ''
+        # Set here and not at the top: shellcheck fails the build on a
+        # variable a builder-only role never reads.
+        kubeconfig="${kubeconfig}"
         echo "── cluster"
         if [ -f "$kubeconfig" ]; then
           if KUBECONFIG="$kubeconfig" kubectl version --request-timeout=5s >/dev/null 2>&1; then
@@ -446,6 +449,17 @@ in
       type = lib.types.str;
       default = "12GiB";
     };
+    nestedVirtualization = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Let the guest run VMs of its own. Apple Virtualization nests from M3
+        on, and only then does the guest have /dev/kvm — which `runInLinuxVM`,
+        and every disk-image build through it, require. On, the builder
+        advertises the `kvm` feature; off, such a build is refused on the Mac
+        instead of failing in the guest. Off on an M1 or M2 host.
+      '';
+    };
     disk = lib.mkOption {
       type = lib.types.str;
       default = "60GiB";
@@ -561,10 +575,14 @@ in
             maxJobs = cfg.cpus;
             speedFactor = 1;
             protocol = "ssh-ng";
+            # `kvm` only where it is true: nix schedules by this list, the
+            # guest's daemon detects /dev/kvm on its own, and a promise the
+            # guest cannot keep fails the build there instead of refusing it here.
             supportedFeatures = [
               "benchmark"
               "big-parallel"
-            ];
+            ]
+            ++ lib.optional cfg.nestedVirtualization "kvm";
           }
         ];
 

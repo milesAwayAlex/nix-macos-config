@@ -28,32 +28,47 @@ let
   };
 in
 {
-  nixpkgs.hostPlatform = "aarch64-darwin";
+  imports = [
+    # Development services the work code expects at their default ports (D24);
+    # the other host runs none.
+    ../modules/darwin/postgresql.nix
+    ../modules/darwin/redis.nix
+  ];
 
+  nixpkgs.hostPlatform = "aarch64-darwin";
   system.primaryUser = "alexm";
-  users.users.alexm.home = "/Users/alexm";
 
   # Homebrew's prefix predates this config, so nix-homebrew adopts it rather
   # than refusing to start. Adoption deletes only the git-tracked files of the
   # brew checkout; everything Homebrew keeps as ignored state — Cellar,
   # Caskroom, bin, Library/Taps — survives untouched (D16).
-  nix-homebrew.user = "alexm";
   nix-homebrew.autoMigrate = true;
 
-  # Brew packages this machine keeps that are not part of the shared
-  # appliance set. Empty today, and the list only matters once
-  # `homebrew.onActivation.cleanup` is turned on — at which point anything
-  # unnamed is uninstalled. Manual installs have no brew receipt and are
-  # invisible to cleanup, so they need no entry.
-  homebrew.brews = [ ];
-  homebrew.casks = [ ];
+  # The password manager is per host (D19): its cask, its browser extension and
+  # its agent socket (modules/home/work.nix) sit together. 1Password's cask
+  # verifies the real bundle for browser integration and system auth.
+  homebrew.casks = [ "1password" ];
+  system.defaults.CustomSystemPreferences."/Library/Preferences/com.google.Chrome".ExtensionInstallForcelist =
+    [
+      # Force-installed so a fresh profile arrives with it; the suffix is
+      # Chrome's own extension update service.
+      "aeblfdkhhhdcdjpifhhbdiojplfjncoa;https://clients2.google.com/service/update2/crx"
+    ];
 
   # Employer-coupled configuration, kept together: the tools, and the licence
   # exception one of them needs. `op` is unfree, and with
   # `useGlobalPkgs = true` home-manager evaluates against nix-darwin's
   # nixpkgs — so the predicate has to be set from this layer even though the
   # package is declared in a home module (D18).
-  home-manager.users.alexm.imports = [ ../modules/home/work.nix ];
+  home-manager.sharedModules = [
+    ../modules/home/work.nix
+    # GKE and its tooling: used on the employer's platform and nowhere else,
+    # so they ride with this host rather than the shared set.
+    ../modules/home/gcloud.nix
+    ../modules/home/k8s.nix
+    # Host-owned like `system.stateVersion` below (D25).
+    { home.stateVersion = "26.05"; }
+  ];
   nixpkgs.config.allowUnfreePredicate =
     pkg:
     builtins.elem (lib.getName pkg) [
@@ -74,6 +89,10 @@ in
     # asks for more.
     memory = "8GiB";
 
+    # M1: Apple Virtualization nests from M3 on, so this guest has no /dev/kvm
+    # and the builder must not claim it. Image builds are not this machine's job.
+    nestedVirtualization = false;
+
     # One directory, at the identical path on both sides. Not ~ : this guest
     # also runs third-party images, and ~/.ssh, the cloud credentials and
     # 1Password's state have no business inside it.
@@ -85,7 +104,7 @@ in
     registryAuth."gcr.io" = lib.getExe gcloudRegistryCredential;
   };
 
-  # Compat marker, set once at this host's first install and then left
-  # alone; the other host keeps its own value when it's ported in.
+  # Compat marker, host-owned (D25): the maximum of the day at this host's
+  # first install, never moved; the other host keeps its own.
   system.stateVersion = 7;
 }
