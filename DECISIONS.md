@@ -768,6 +768,22 @@ file, the guest's daemon detects the device on its own, and a promise the
 guest cannot keep fails the build there instead of refusing it here. `work`
 opts out on its M1; the default is on because the next machine will not.
 
+*2026-09-20:* `ssh.overVsock = false` in the template. lima 2.x forwards the
+ssh port to a vz guest over vsock by default, where the guest's sshd is
+systemd's socket-activated `sshd-vsock.socket`: one service instance per
+connection, 64 at most. lima's forwarder (`tcpproxy`) closes nothing until both
+directions have ended, and passes EOF on only by half-closing, which the vz
+vsock connection cannot do — so the instance serving a connection the Mac has
+closed lives until the guest writes and the write fails, which an idle sshd
+never does. Nix opens one connection per remote derivation and closes it when
+the derivation is done; the 65th remote build of a boot found the socket full,
+nix read the refusal as "failed to start SSH connection", disabled the builder
+for the rest of that build and declined everything after it, while
+`limactl shell` kept working over lima's one multiplexed connection. Over the
+virtual network the guest's ordinary sshd serves the port, a closed socket is
+a FIN, and the session ends. The key comes back out when lima's vz connection
+learns to half-close, or its forwarder closes the peer when one side ends.
+
 **Revisit when.** A machine wants a role set neither output has — a third line
 in the flake, and the question of whether the sets should be composed there
 rather than enumerated. Or nix-darwin's linux-builder stops putting a private

@@ -64,6 +64,13 @@ let
 
       inherit (cfg) cpus memory disk;
       ssh.localPort = cfg.sshPort;
+      # Over lima's virtual network, not vsock. lima's vsock forwarder cannot
+      # pass the Mac's EOF on to the guest (the vz connection has no half-close),
+      # so the guest's per-connection sshd instance outlives every connection nix
+      # closes, and systemd caps those instances at 64: the builder went dark on
+      # the 65th remote build of a boot. Over TCP a closed socket is a FIN and
+      # the session ends with it.
+      ssh.overVsock = false;
 
       # lima's own containerd provisioning is for its stock images and would
       # install a second one; the guest declares whichever it needs.
@@ -250,7 +257,7 @@ let
         else
           echo "   host key NOT pinned — \`just devvm-adopt\`"
         fi
-        echo "   verify   sudo nix store info --store ssh-ng://$name"
+        echo "   verify   sudo -H nix store info --store ssh-ng://$name"
       ''}
 
       ${lib.optionalString (cfg.registryAuth != { }) ''

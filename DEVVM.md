@@ -46,7 +46,7 @@ In the guest:
 Every step has a check, nothing before step 3 changes the guest, and all of it
 is reversible ("Removing it", below). On a builder-only host (`personal`) the
 share, the shims, the cluster and everything said about them below do not
-apply; the four steps are the same.
+apply; the four steps are the same, and step 3 has its own form there.
 
 Before starting: Rancher Desktop must not be running. Its k3s forwards 6443 to
 localhost exactly as this one will, and the loser gets a TLS error against the
@@ -99,6 +99,18 @@ long as `devvm.dockerShims` is off for the host.
    needs none. Pushing first and using
    `github:milesAwayAlex/nix-macos-config#devvm` works too; the clone only
    avoids publishing an untested change. It is not needed after this step.
+
+   A builder-only host has no mount, so the Mac drives the same first rebuild
+   over lima's ssh — `just devvm-rebuild` with `boot` in place of `switch`,
+   and the attribute named because the seed's hostname is not ours:
+
+       NIX_SSHOPTS="-F $HOME/.lima/devvm/ssh.config" nixos-rebuild boot --flake .#devvm-builder --build-host lima-devvm --target-host lima-devvm --sudo
+       limactl restart devvm
+
+   The Mac evaluates and ships the derivations; the guest builds and installs
+   its own system as before. The seed accepts this because nixos-lima's module
+   trusts `wheel` at the nix daemon and gives it passwordless sudo, and
+   lima-init puts lima's user in `wheel`.
 
 4. **Adopt.** `just devvm-adopt` reads the guest's host key off the state
    disk and pins it, then pushes the Mac's public key in; sudo prompts once,
@@ -246,6 +258,15 @@ the images and the disk sizes are honoured only at creation.
   disk, and this is the loud symptom. **"Permission denied (publickey)".** The
   authorized key is missing or not readable by the `builder` account:
   `just devvm-adopt` puts both right.
+- **Builder: "failed to start SSH connection" part-way through a build with
+  many derivations, `limactl shell` still fine, a restart cures it until the
+  next such build.** The instance copy of the template still forwards ssh
+  over vsock — a copy from before `ssh.overVsock = false`. The guest's
+  per-connection sshd instances outlive nix's connections and systemd caps
+  them at 64; `just devvm-shell systemctl show sshd-vsock.socket -p
+  NConnections -p NRefused` shows the count. Re-sync the instance copy as
+  under *What a change costs* and start; a restart alone only resets the
+  count.
 - **kubectl: "context was not found for specified context: devvm".** VM
   stopped, or the kubeconfig probe timed out
   (`just devvm-shell journalctl -u k3s -u devvm-kubeconfig`); `kubectx` to
