@@ -89,10 +89,6 @@ in
     # asks for more.
     memory = "8GiB";
 
-    # M1: Apple Virtualization nests from M3 on, so this guest has no /dev/kvm
-    # and the builder must not claim it. Image builds are not this machine's job.
-    nestedVirtualization = false;
-
     # One directory, at the identical path on both sides. Not ~ : this guest
     # also runs third-party images, and ~/.ssh, the cloud credentials and
     # 1Password's state have no business inside it.

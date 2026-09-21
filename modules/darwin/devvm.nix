@@ -458,13 +458,14 @@ in
     };
     nestedVirtualization = lib.mkOption {
       type = lib.types.bool;
-      default = true;
+      default = false;
       description = ''
-        Let the guest run VMs of its own. Apple Virtualization nests from M3
-        on, and only then does the guest have /dev/kvm — which `runInLinuxVM`,
-        and every disk-image build through it, require. On, the builder
-        advertises the `kvm` feature; off, such a build is refused on the Mac
-        instead of failing in the guest. Off on an M1 or M2 host.
+        Let the guest run hardware-accelerated VMs of its own; Apple
+        Virtualization nests from M3 on. Off, the guest has no /dev/kvm and a
+        VM started inside a build runs under TCG, the faster engine for the
+        short, exit-dense VM steps behind the builder's `kvm` feature. On,
+        they become second-level guests, every exit a round trip through
+        macOS.
       '';
     };
     disk = lib.mkOption {
@@ -582,14 +583,17 @@ in
             maxJobs = cfg.cpus;
             speedFactor = 1;
             protocol = "ssh-ng";
-            # `kvm` only where it is true: nix schedules by this list, the
-            # guest's daemon detects /dev/kvm on its own, and a promise the
-            # guest cannot keep fails the build there instead of refusing it here.
+            # `kvm` unconditionally, as nix-darwin's linux-builder does. Nix
+            # schedules by this list, and the guest is NixOS, whose daemon
+            # declares the feature whether or not /dev/kvm exists, so it never
+            # refuses such a build: in the sandbox nix binds the device when it
+            # is there and warns when it is not, and qemu's `accel=kvm:tcg`
+            # falls back to emulation.
             supportedFeatures = [
               "benchmark"
               "big-parallel"
-            ]
-            ++ lib.optional cfg.nestedVirtualization "kvm";
+              "kvm"
+            ];
           }
         ];
 

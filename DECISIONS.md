@@ -784,6 +784,20 @@ virtual network the guest's ordinary sshd serves the port, a closed socket is
 a FIN, and the session ends. The key comes back out when lima's vz connection
 learns to half-close, or its forwarder closes the peer when one side ends.
 
+*2026-09-20, later:* `kvm` is advertised whether or not the guest has
+`/dev/kvm`, and `nestedVirtualization` defaults to off. The 09-17 premise was
+wrong: the guest is NixOS, whose nix module declares `kvm` in
+`system-features` unconditionally, so its daemon never refuses such a build.
+Nix binds `/dev/kvm` into the sandbox when it exists and warns when it does
+not, and `runInLinuxVM` starts qemu with `accel=kvm:tcg`, which falls back to
+emulation — exactly what nix-darwin's linux-builder does, and how it built a
+disk image in minutes. With nesting on, that same image VM became a
+second-level guest under Apple's hypervisor, every exit a round trip through
+macOS, and its I/O-bound steps ran for over twenty minutes without finishing.
+The VM steps behind the feature are short and exit-dense, so TCG is the
+better engine for them; nesting comes back for a guest that needs a real VM
+of its own.
+
 **Revisit when.** A machine wants a role set neither output has — a third line
 in the flake, and the question of whether the sets should be composed there
 rather than enumerated. Or nix-darwin's linux-builder stops putting a private

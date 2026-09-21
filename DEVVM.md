@@ -210,7 +210,7 @@ the images and the disk sizes are honoured only at creation.
 | Which role set this Mac runs (`devvm.guest`) | `hosts/<host>.nix` | `just switch`, then `just devvm-rebuild .#<name>` once — the hostname follows the attribute from there; the template's kubeconfig copy follows the cluster role, so re-sync the instance copy as above |
 | A role set that does not exist yet | `flake.nix`, one line | as above |
 | CPUs, memory, the shared directory | `hosts/<host>.nix` (`devvm.*`, beside the shims) | `just switch`, re-sync the instance copy, start |
-| Nested virtualization (`devvm.nestedVirtualization`; M3 and later, on by default) | `hosts/<host>.nix` | a template key: `just switch`, re-sync the instance copy, start. The builder's `kvm` feature follows it at the switch, and only a guest with `/dev/kvm` can honour it |
+| Nested virtualization (`devvm.nestedVirtualization`; M3 and later, off by default) | `hosts/<host>.nix` | a template key: `just switch`, re-sync the instance copy, start. The builder advertises `kvm` either way; without `/dev/kvm` the VM behind such a build runs under TCG |
 | A registry host, or how its credential is made | `hosts/<host>.nix` (`devvm.registryAuth`) | `just switch`; a guest from before the credential store needs one `just devvm-rebuild` |
 | ssh port | `hosts/<host>.nix` | the same, and both sides before the next start: the daemon's alias and the instance must agree |
 | Seed image or `vmType` | `modules/darwin/devvm.nix` | `just devvm-down`, `limactl delete devvm`, then bootstrap steps 2–3 again. The state disk carries both keys, so no adopt, and the cluster comes back |

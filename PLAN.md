@@ -489,6 +489,10 @@ and the dated addenda to D19 and D22.
       virtualization on — the module's default, `work` opts out on its M1 — so
       the guest has `/dev/kvm` and the builder advertises `kvm`, which
       `runInLinuxVM` and every disk-image build through it require.
+- [x] `kvm` advertised unconditionally, nesting off by default *(2026-09-20)*:
+      the guest's daemon declares the feature regardless and qemu falls back
+      to TCG without `/dev/kvm`, as linux-builder always did; nested KVM made
+      the image VM slower than emulation (D22). Both hosts build it now.
 - [x] State versions host-owned (D25) *(2026-09-17)*: 7 and 26.05 on
       `personal`, from the maximum of the day; `work` keeps its own.
 - [x] `darwinModules.pam` — same sensor; it is in the common list.
