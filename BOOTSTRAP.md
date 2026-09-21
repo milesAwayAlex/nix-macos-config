@@ -15,7 +15,8 @@ without it.
 7. [Touch ID](#touch-id) — enroll a fingerprint.
 8. [1Password](#1password) on `work`, [Bitwarden](#bitwarden) on `personal` —
    sign in, the switches.
-9. [Browsers](#browsers) — sign in to Chrome; the extension pairs with the app.
+9. [Browsers](#browsers) — sign in to Chrome, install the extension; it pairs
+   with the app.
 10. [AI harness](#ai-harness) and [Slack](#slack) — native installers, logins.
 11. [Dev VM](#dev-vm) — DEVVM.md takes over.
 
@@ -201,15 +202,18 @@ on disk stay until each has a vault entry. Commit signing is backlog (PLAN.md).
 ## Browsers
 
 Chrome is the declared browser (cask), and `modules/darwin/chrome.nix` writes
-its policy at the first switch: the host's password-manager extension
-force-installed (1Password on `work`, Bitwarden on `personal`), Chrome's own
-password manager and autofill off. `chrome://policy` shows the baseline before
-any sign-in. What remains is per-account: sign in to the profile (sync is a
-per-profile choice the policy leaves alone), and let the extension pair with
-its app — 1Password asks once to trust the browser; Bitwarden's pairing is the
-biometrics switch in its section. From then on the extension unlocks with the
-app, by Touch ID once the app's own switch is on. Firefox is not installed and
-has no step; its declared form is in the PLAN backlog.
+its policy at the first switch: Chrome's own password manager and autofill
+off. `chrome://policy` shows the baseline before any sign-in, at the
+Recommended level — defaults, not locks, which is all a plist written by
+`defaults` can be. What remains is per-account: sign in to the profile (sync
+is a per-profile choice the policy leaves alone), install the host's
+password-manager extension from the Web Store — 1Password on `work`,
+Bitwarden on `personal`; a force-install policy cannot deliver it here, D19 —
+and let the extension pair with its app: 1Password asks once to trust the
+browser; Bitwarden's pairing is the biometrics switch in its section. From
+then on the extension unlocks with the app, by Touch ID once the app's own
+switch is on. Firefox is not installed and has no step; its declared form is
+in the PLAN backlog.
 
 ## AI harness
 

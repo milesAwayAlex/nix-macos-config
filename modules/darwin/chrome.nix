@@ -3,9 +3,11 @@
 # to be the full path — a bare `com.google.Chrome` would land in root's own
 # preferences and do nothing.
 #
-# The password manager's extension is per host (D19): each hosts/<name>.nix
-# adds `ExtensionInstallForcelist` to this same domain, and the two definitions
-# merge — a clash on one key would fail the eval rather than pick a side.
+# Chrome takes a plist written this way at its Recommended level, not
+# Mandatory: macOS reports only managed preferences as forced. So these keys
+# are defaults the user can flip in Settings, not locks, and a force-install
+# list would be ignored outright — the password manager's extension is a hand
+# install (D19, BOOTSTRAP.md).
 { ... }:
 {
   system.defaults.CustomSystemPreferences."/Library/Preferences/com.google.Chrome" = {

@@ -44,16 +44,11 @@ in
   # Caskroom, bin, Library/Taps — survives untouched (D16).
   nix-homebrew.autoMigrate = true;
 
-  # The password manager is per host (D19): its cask, its browser extension and
-  # its agent socket (modules/home/work.nix) sit together. 1Password's cask
-  # verifies the real bundle for browser integration and system auth.
+  # The password manager is per host (D19): its cask and its agent socket
+  # (modules/home/work.nix) sit together; the browser extension is a hand
+  # install (BOOTSTRAP.md). 1Password's cask verifies the real bundle for
+  # browser integration and system auth.
   homebrew.casks = [ "1password" ];
-  system.defaults.CustomSystemPreferences."/Library/Preferences/com.google.Chrome".ExtensionInstallForcelist =
-    [
-      # Force-installed so a fresh profile arrives with it; the suffix is
-      # Chrome's own extension update service.
-      "aeblfdkhhhdcdjpifhhbdiojplfjncoa;https://clients2.google.com/service/update2/crx"
-    ];
 
   # Employer-coupled configuration, kept together: the tools, and the licence
   # exception one of them needs. `op` is unfree, and with

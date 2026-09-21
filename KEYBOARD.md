@@ -23,8 +23,8 @@ through where noted; `cmd` chords exist only where listed - every other
 | `^F` | → | `shift` = select · `option` = word-forward · `^⌘F` **not captured** - macOS fullscreen toggle |
 | `^P` | ↑ | `shift`/`option` pass through · `^⌘P` → ⌘↑ (top of page/document; Finder: parent folder) |
 | `^N` | ↓ | `shift`/`option` pass through · `^⌘N` → ⌘↓ (bottom of page/document; Finder: open item) |
-| `^W` | ⌥⌫ (delete word back) | - |
-| `^U` | ⌘⌫ (delete to line start) | - |
+| `^W` | ⌥⌫ (delete word back) | not in UTM either: the guest is Linux, whose line discipline and readline have `^W`/`^U` natively, and `⌥⌫`/`⌘⌫` mean nothing to it |
+| `^U` | ⌘⌫ (delete to line start) | not in UTM either, as above |
 
 ## Spacebar
 

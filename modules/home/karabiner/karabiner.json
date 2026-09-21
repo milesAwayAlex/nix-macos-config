@@ -121,7 +121,7 @@
                             {
                                 "conditions": [
                                     {
-                                        "bundle_identifiers": ["^org\\.alacritty$"],
+                                        "bundle_identifiers": ["^org\\.alacritty$", "^com\\.utmapp\\.UTM$"],
                                         "type": "frontmost_application_unless"
                                     }
                                 ],
@@ -143,7 +143,7 @@
                             {
                                 "conditions": [
                                     {
-                                        "bundle_identifiers": ["^org\\.alacritty$"],
+                                        "bundle_identifiers": ["^org\\.alacritty$", "^com\\.utmapp\\.UTM$"],
                                         "type": "frontmost_application_unless"
                                     }
                                 ],

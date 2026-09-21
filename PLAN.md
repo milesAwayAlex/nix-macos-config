@@ -485,6 +485,10 @@ and the dated addenda to D19 and D22.
       with the agent socket. `iina` beside it; UTM and Alacritty from nix as
       on `work`. Karabiner's hand install needs nothing: a pkg cask re-runs
       the installer.
+- [x] Extension by hand (D19) *(2026-09-20)*: the force-install lines are
+      gone from both hosts — a `defaults`-written plist is Recommended-level
+      to Chrome and the force list reads only the managed store; BOOTSTRAP.md
+      carries the Web Store step.
 - [x] Builder only *(2026-09-17)*: `devvm.guest = devvm-builder`, nested
       virtualization on — the module's default, `work` opts out on its M1 — so
       the guest has `/dev/kvm` and the builder advertises `kvm`, which

@@ -5,20 +5,15 @@
   nixpkgs.hostPlatform = "aarch64-darwin";
   system.primaryUser = "alex";
 
-  # The password manager is per host (D19): its cask, its browser extension and
-  # its agent socket (modules/home/personal.nix) sit together. The desktop app
-  # is what serves ssh and lets the extension unlock by Touch ID. iina beside
-  # it: both self-update, which is the cask test (D16).
+  # The password manager is per host (D19): its cask and its agent socket
+  # (modules/home/personal.nix) sit together. The desktop app is what serves
+  # ssh and lets the extension unlock by Touch ID; the extension itself is a
+  # hand install (BOOTSTRAP.md). iina beside it: both self-update, which is
+  # the cask test (D16).
   homebrew.casks = [
     "bitwarden"
     "iina"
   ];
-  system.defaults.CustomSystemPreferences."/Library/Preferences/com.google.Chrome".ExtensionInstallForcelist =
-    [
-      # Force-installed so a fresh profile arrives with it; the suffix is
-      # Chrome's own extension update service.
-      "nngceckbapebfimnlniiiahkandclblb;https://clients2.google.com/service/update2/crx"
-    ];
 
   home-manager.sharedModules = [
     ../modules/home/personal.nix

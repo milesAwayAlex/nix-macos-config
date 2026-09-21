@@ -519,6 +519,18 @@ each host adds its extension to `ExtensionInstallForcelist` in the same
 domain; the definitions merge, and a clash on one key would fail the eval.
 Signing waits for a key that exists in the vault (PLAN.md backlog).
 
+*2026-09-20:* The extension is a hand install from the Web Store, on both
+hosts; the `ExtensionInstallForcelist` lines are gone. Chrome's macOS loader
+takes a key as Mandatory only when macOS reports it forced, which only a
+managed preference — an MDM or a configuration profile — is; a plist written
+by `defaults` lands at the Recommended level, and the force-install list is
+read from the managed store alone, so the policy showed on `chrome://policy`
+and installed nothing. `work` never noticed: its 1Password extension was a
+hand install all along, as Chrome's own record says. A configuration profile
+would make it mandatory, but it can only be installed through System Settings
+by hand, a second mechanism for the same domain to save one click. The other
+keys stay: at the Recommended level they are defaults, not locks.
+
 **Revisit when.** Two managers hold keys on one machine — then `Host *`
 becomes the personal default and work hosts get named blocks.
 
