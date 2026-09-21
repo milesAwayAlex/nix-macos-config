@@ -22,9 +22,9 @@
   ];
 
   # Builder only (PLAN.md Phase 6): aarch64-linux derivations, image builds
-  # for UTM among them, which is what nested virtualization (on by default)
-  # is for. No shared directory and no registries — a builder needs nothing
-  # from the host. Sized for that: the load is a build, not a cluster.
+  # for UTM among them; the VM inside such a build runs under TCG, nesting
+  # off (D22). No shared directory and no registries — a builder needs
+  # nothing from the host. Sized for that: the load is a build, not a cluster.
   devvm = {
     enable = true;
     guest = self.nixosConfigurations.devvm-builder;

@@ -175,10 +175,10 @@ per-account and made by hand, one per host.
 
 ## Bitwarden
 
-`personal`'s manager (D19). The cask installs the desktop app and the Chrome
-policy force-installs the extension; the app is what serves ssh and what lets
-the extension unlock by Touch ID, so it comes first. Sign in to it, then in its
-own Settings:
+`personal`'s manager (D19). The cask installs the desktop app; the extension
+is a Web Store install ([Browsers](#browsers)). The app is what serves ssh and
+what lets the extension unlock by Touch ID, so it comes first. Sign in to it,
+then in its own Settings:
 
 1. **Security → Unlock with Touch ID.** Needs a fingerprint already enrolled
    ([Touch ID](#touch-id)). **Ask for Touch ID on app start** is optional.
@@ -188,7 +188,13 @@ own Settings:
 3. **Enable SSH agent** — creates `~/.bitwarden-ssh-agent.sock`, the path
    `modules/home/personal.nix` names as `IdentityAgent`. Until it is on, ssh
    warns once and falls back to the keys on disk. **Ask for authorization when
-   using SSH agent** sets how often a signature asks.
+   using SSH agent** is the approval: a dialog in the app's own window, which
+   comes to the front, and a button to click — it has no biometric form.
+   *Always* asks per signature. *Remember until vault is locked* asks once per
+   key and host, then again after the vault locks, so the vault timeout is
+   what sets how often that is. *Never* signs silently. Take *Remember until
+   vault is locked*: Touch ID then happens at the unlock, and the click once
+   after it.
 
 Then the extension, signed in to the same account: **Settings → Account
 security → Unlock with biometrics**. Chrome asks once to let the extension

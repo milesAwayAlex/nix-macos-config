@@ -62,8 +62,10 @@
       . ${./prompt.bash}
 
       # Machine-local hook (D10), deliberately last: IT/EDR cert exports and
-      # anything this machine alone needs on PATH live there.
-      [ -r "$HOME/.bashrc.local" ] && . "$HOME/.bashrc.local"
+      # anything this machine alone needs on PATH live there. `if`, not `&&`:
+      # this is the last line, and a failed test would be the first prompt's
+      # exit status on a machine without the file.
+      if [ -r "$HOME/.bashrc.local" ]; then . "$HOME/.bashrc.local"; fi
     '';
   };
 
