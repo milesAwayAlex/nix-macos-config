@@ -471,6 +471,11 @@ tool that moves on a deliberate `nix flake update`.
 that matters for a public repo, or the list grows past the point where one
 comment each is readable.
 
+*2026-09-20:* The predicate moved with the rest of the employer's
+configuration into `modules/darwin/work.nix`, beside the `sharedModules`
+line that imports `homeModules.work` — the same adjacency, one file over;
+both work hosts get it by importing that module (D25).
+
 ## D19 — The ssh agent is the password manager's, one per machine *(2026-08-20)*
 
 **Decision.** Private ssh keys live in a password manager and are reached
@@ -950,3 +955,13 @@ changes data.
 **Revisit when.** A host wants a second user — the derivations from
 `primaryUser` stop being the whole story — or nix-darwin learns to name the
 flake attribute of the running system, which would retire `NIXHOST`.
+
+*2026-09-20:* A role with two machines. `work-m4` is the employer's second
+laptop and runs everything `work` runs, so what the host file held for the
+employer — the services, the cask, the platform home modules and the licence
+exception, the VM — moved to `modules/darwin/work.nix`, which both work hosts
+import; the VM's mount is spelled from the primary user there. The host files
+keep what the machine alone knows: the account (`alexm` on one, `alex` on the
+other), `work`'s Homebrew history, the state versions. `work`'s derivation
+did not change. The home half of the same split was already
+`modules/home/work.nix`.

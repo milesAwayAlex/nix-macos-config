@@ -32,12 +32,12 @@ Declarative macOS machine configuration: flake-based nix-darwin + home-manager (
   flake input, so brew's version is pinned in `flake.lock` and `brew update`
   is not how it moves — `nix flake update nix-homebrew` is.
 - Unfree packages need their name in the `allowUnfreePredicate` list in
-  `hosts/work.nix` (D18). It cannot go in a home module: `useGlobalPkgs = true`
+  `modules/darwin/work.nix` (D18). It cannot go in a home module: `useGlobalPkgs = true`
   drops home-manager's `nixpkgs.*` module outright, so `nixpkgs.config` is not
   an option that exists there. Host-coupled home modules — the employer's, a
   password manager's — and `home.stateVersion` go through
-  `home-manager.sharedModules` in the host file (D25), so no file restates the
-  username.
+  `home-manager.sharedModules`, in the host file or in `modules/darwin/work.nix`
+  for what every work host takes (D25), so no file restates the username.
 - `system.defaults` is write-only (`modules/darwin/preferences.nix`): one
   `defaults write` per key at activation, never read back, so removing a key
   stops the write but leaves the value on the machine, and nothing is enforced
@@ -75,4 +75,4 @@ Declarative macOS machine configuration: flake-based nix-darwin + home-manager (
   `dataDir` unquoted, so it can never point into `Application Support`. A
   machine still running Postgres.app must stop it before the switch, or the
   agent crash-loops on 5432 until it does.
-- Two hosts, `work` and `personal`, share the module set; `hosts/<name>.nix` states only what that machine alone knows (D25). The password manager is per host (D19): its cask, its Chrome extension and its agent socket sit together — 1Password on `work`, Bitwarden on `personal`.
+- Three hosts share the module set: `work` and `work-m4` are the employer's laptops and import `modules/darwin/work.nix` on top of it; `hosts/<name>.nix` states only what that machine alone knows (D25). The password manager is per host (D19): its cask, its Chrome extension and its agent socket sit together — 1Password on the work hosts, Bitwarden on `personal`.

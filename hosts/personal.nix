@@ -33,6 +33,6 @@
   };
 
   # Compat marker, host-owned (D25): the maximum of the day at this host's
-  # first install, never moved; the other host keeps its own.
+  # first install, never moved; the other hosts keep their own.
   system.stateVersion = 7;
 }

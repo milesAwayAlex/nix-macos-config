@@ -13,8 +13,8 @@ without it.
 5. [Login shell](#login-shell) — `chsh`, once.
 6. [Input source](#input-source) — log out once, add the layout.
 7. [Touch ID](#touch-id) — enroll a fingerprint.
-8. [1Password](#1password) on `work`, [Bitwarden](#bitwarden) on `personal` —
-   sign in, the switches.
+8. [1Password](#1password) on the work hosts, [Bitwarden](#bitwarden) on
+   `personal` — sign in, the switches.
 9. [Browsers](#browsers) — sign in to Chrome, install the extension; it pairs
    with the app.
 10. [AI harness](#ai-harness) and [Slack](#slack) — native installers, logins.
@@ -50,6 +50,13 @@ git clone https://github.com/milesAwayAlex/nix-macos-config && cd nix-macos-conf
 git config core.hooksPath .githooks   # until the managed git config takes over at the switch
 ```
 
+On a managed machine the endpoint agent is there before Nix is, and it
+writes its certificate exports into the shell rc files it finds or creates
+(D10). Move that block into `~/.bashrc.local` and delete the bash files it
+wrote — `.bash_profile`, `.bashrc`, `.profile` — before the first switch, or
+home-manager stops at "existing file in the way". The zsh files are not
+managed and keep theirs.
+
 Adopt any pre-existing casks first (next section). Then the first switch.
 `darwin-rebuild` and `just` do not exist yet — both arrive with it — so build
 the system from the lock and run the copy inside the result. `NIXHOST` is how
@@ -57,7 +64,7 @@ the justfile knows which machine this is; the configuration exports it from
 this switch on, so it is set by hand exactly once, here:
 
 ```sh
-export NIXHOST=work   # or personal
+export NIXHOST=work   # or work-m4, or personal
 nix build .#darwinConfigurations.$NIXHOST.system
 sudo ./result/sw/bin/darwin-rebuild switch --flake .#$NIXHOST
 ```
@@ -82,6 +89,11 @@ brew install --cask --adopt google-chrome 1password
 ```
 
 Pkg-based casks (Karabiner) have no such check; they just re-run the installer.
+
+A machine without Homebrew meets the same check one step later: the first
+switch installs Homebrew, then `brew bundle` aborts on any app an MDM had
+already dropped into `/Applications`. Brew exists by then — adopt those, and
+switch again.
 
 ### Karabiner-Elements
 
@@ -146,7 +158,7 @@ instead. Off only means that path would ask for the account password rather than
 a fingerprint; it disables nothing.
 
 The same enrollment backs the manager's biometric unlock — 1Password's and,
-through it, `op` on `work`; Bitwarden's on `personal`.
+through it, `op` on the work hosts; Bitwarden's on `personal`.
 
 Check it from **inside tmux** once the switch has gone in — `sudo -k && sudo -v`
 should raise the Touch ID prompt rather than ask for a password. That path is
@@ -155,7 +167,7 @@ either way.
 
 ## 1Password
 
-`work`'s manager (D19). The cask installs the app; the rest is a login and three
+The work hosts' manager (D19). The cask installs the app; the rest is a login and three
 switches, which live in two different panes of the app's own settings:
 
 1. **Security → Unlock using Touch ID.** Gates everything below — without it the
@@ -213,8 +225,9 @@ off. `chrome://policy` shows the baseline before any sign-in, at the
 Recommended level — defaults, not locks, which is all a plist written by
 `defaults` can be. What remains is per-account: sign in to the profile (sync
 is a per-profile choice the policy leaves alone), install the host's
-password-manager extension from the Web Store — 1Password on `work`,
-Bitwarden on `personal`; a force-install policy cannot deliver it here, D19 —
+password-manager extension from the Web Store — 1Password on the work
+hosts, Bitwarden on `personal`; a force-install policy cannot deliver it
+here, D19 —
 and let the extension pair with its app: 1Password asks once to trust the
 browser; Bitwarden's pairing is the biometrics switch in its section. From
 then on the extension unlocks with the app, by Touch ID once the app's own

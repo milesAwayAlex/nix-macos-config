@@ -52,9 +52,9 @@
     {
       # One entry per Mac, keyed by the alias it is switched as
       # (`--flake .#<name>`), never a hostname. The common list is every module
-      # both machines run; `hosts/<name>.nix` states what only that machine
+      # every machine runs; `hosts/<name>.nix` states what only that machine
       # knows and imports what only it runs (D25).
-      darwinConfigurations = nixpkgs.lib.genAttrs [ "work" "personal" ] (
+      darwinConfigurations = nixpkgs.lib.genAttrs [ "work" "work-m4" "personal" ] (
         name:
         nix-darwin.lib.darwinSystem {
           # `self` so a host can name the guest it runs (`devvm.guest`).
@@ -153,6 +153,7 @@
       darwinModules.postgresql = ./modules/darwin/postgresql.nix;
       darwinModules.preferences = ./modules/darwin/preferences.nix;
       darwinModules.redis = ./modules/darwin/redis.nix;
+      darwinModules.work = ./modules/darwin/work.nix;
 
       # Packages this repo maintains itself because nixpkgs has none (D14).
       packages.${system}.kube-fzf = pkgs.callPackage ./packages/kube-fzf.nix { };

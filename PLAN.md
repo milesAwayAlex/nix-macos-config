@@ -47,11 +47,13 @@ principles here say *why*, that file says *how*.
 
 | Alias | Hardware | Status |
 |---|---|---|
-| `work` | This laptop, MacBookPro18,2, macOS 15.7.7 (Sequoia), **MDM-managed**, Homebrew present | First target. Phase 0 MDM gate passed; Nix seeded 2026-08-15; fully declared and in daily use since 2026-09-06 — brew holds three casks and no formulae, redis and postgres are nix services, the dev VM (Phase 8) has been in daily use since 2026-09-05. Converged 2026-09-12 (Phase 5 closed). |
+| `work` | This laptop, MacBookPro18,2, macOS 15.7.7 (Sequoia), **MDM-managed**, Homebrew present | First target. Phase 0 MDM gate passed; Nix seeded 2026-08-15; fully declared and in daily use since 2026-09-06 — brew holds three casks and no formulae, redis and postgres are nix services, the dev VM (Phase 8) has been in daily use since 2026-09-05. Converged 2026-09-12 (Phase 5 closed). Returns to IT once `work-m4` has taken over (Phase 9). |
 | `personal` | Personal laptop, M4, 32 GB, macOS 15 (Sequoia), no Homebrew, Nix seeded by the earlier Determinate installer in its upstream mode | Host #2. Declared 2026-09-17 as a fresh configuration — the shared set plus `hosts/personal.nix` — not a port; its own flake (a `homeModules.karabiner` consumer since 2026-08-16) retires at the first switch. Phase 6. |
+| `work-m4` | Work laptop #2, M4 Pro, 48 GB, macOS 15 (Sequoia), **MDM-managed** by the same MDM, nothing on it yet | Host #3. Declared 2026-09-20: `hosts/work-m4.nix` — account `alex`, the state versions — over `modules/darwin/work.nix`, the employer's configuration factored out of `work`'s host file with `work`'s derivation unchanged. Takes over from `work`. Phase 9. |
 
-Flake outputs are **alias-named** (`darwinConfigurations.work`, `.personal`),
-never hostnames — `work`'s is an employer asset name. Each configuration
+Flake outputs are **alias-named** (`darwinConfigurations.work`, `.work-m4`,
+`.personal`), never hostnames — the work laptops' are employer asset names.
+Each configuration
 exports `NIXHOST` as its own alias, which is what the justfile reads; a machine
 sets it by hand once, before its first switch (BOOTSTRAP.md, D25).
 
@@ -802,6 +804,29 @@ rather than a gate.*
 
 
 ---
+
+## Phase 9 — Third host (`work-m4`) ☐
+
+The employer's second laptop, and the first time a role has two machines:
+same MDM, same declared configuration, a different account name. Shape
+settled 2026-09-20 — the D25 addendum.
+
+- [x] `modules/darwin/work.nix` and `hosts/work-m4.nix` *(2026-09-20)*: the
+      employer's darwin configuration — services, cask, platform home
+      modules, licence exception, the VM with its mount spelled from the
+      primary user — factored out of `work`'s host file into a module both
+      work hosts import; `work`'s derivation is unchanged. Each host file
+      keeps the user, the state versions and, on `work`, its Homebrew history.
+- [ ] First switch on the machine, from BOOTSTRAP.md, with the one-off steps
+      around it (`bootstrap-work-m4.md`, untracked): the endpoint agent's rc
+      rewrites before home-manager owns the files, the MDM-dropped apps to
+      adopt, the logins, the dev DB re-seeded rather than carried.
+- [ ] Converge; **diff the two work machines** — their configurations differ
+      by the account alone, so every gap is a repo fix, not a local fix.
+- [ ] `work` returns to IT: delete `hosts/work.nix` and its name in the
+      flake's host list; the Machines table keeps the record.
+
+**Gate:** `work-m4` reaches declared state using only the repo + BOOTSTRAP.md.
 
 ## Deferred backlog (designed, not scheduled)
 

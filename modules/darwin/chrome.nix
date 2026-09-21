@@ -1,4 +1,4 @@
-# Chrome policy, the part both machines share. The attribute name is handed to
+# Chrome policy, the part every machine shares. The attribute name is handed to
 # `defaults write` verbatim by an activation script running as root, so it has
 # to be the full path — a bare `com.google.Chrome` would land in root's own
 # preferences and do nothing.

@@ -14,7 +14,7 @@ in
 {
   home.packages = with pkgs; [
     # `op`. Unfree, so it needs the name allowlisted in the
-    # `allowUnfreePredicate` in hosts/work.nix before this module evaluates
+    # `allowUnfreePredicate` in modules/darwin/work.nix before this module evaluates
     # (D18).
     _1password-cli
     spacectl # Spacelift CLI; the API credentials stay outside the repo
