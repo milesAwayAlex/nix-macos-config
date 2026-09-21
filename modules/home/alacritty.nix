@@ -16,6 +16,13 @@
       font = {
         normal.family = "Hack";
         size = lib.mkDefault 23.0; # host-tunable
+        # 1.3x line spacing reads easier than the font's own. Alacritty has
+        # no multiplier, only whole physical pixels added to the cell: Hack's
+        # line is 54 px at 23 pt on a 2x display, so 16 makes it 70. Glyphs
+        # sit at the cell's bottom; half the extra lifts them back to the
+        # middle.
+        offset.y = 16;
+        glyph_offset.y = 8;
       };
 
       colors = {
