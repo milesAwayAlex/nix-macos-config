@@ -453,7 +453,7 @@ about it.
 home-manager are separate `evalModules` calls, and `useGlobalPkgs = true`
 drops HM's `nixpkgs.*` module entirely (`useNixpkgsModule = !useGlobalPkgs`),
 so `nixpkgs.config` is not an option a home module can set. Given that, the
-predicate sits in `hosts/work.nix` alongside the `home-manager.users.alexm`
+predicate sits in `hosts/work.nix` alongside the `home-manager.users.alex`
 import that pulls in the package — the closest the two layers can get. A
 consumer taking `homeModules.work` from elsewhere needs their own predicate;
 the README says so.

@@ -80,7 +80,7 @@ long as `devvm.dockerShims` is off for the host.
    committed state there and rebuild from the mount:
 
        git clone ~/code/tmp/nix-macos-config ~/code-shared/nix-macos-config
-       just devvm-shell nixos-rebuild boot --flake /Users/alexm/code-shared/nix-macos-config#devvm --sudo
+       just devvm-shell nixos-rebuild boot --flake /Users/alex/code-shared/nix-macos-config#devvm --sudo
        limactl restart devvm
 
    `boot` and a restart rather than `switch`: this generation moves sshd's

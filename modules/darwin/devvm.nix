@@ -489,7 +489,7 @@ in
     mount = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;
-      example = "/Users/alexm/code-shared";
+      example = "/Users/alex/code-shared";
       description = ''
         One host directory, shared writable at the identical path so that
         `-v $PWD:/app` resolves the same on both sides. Null — the default,
