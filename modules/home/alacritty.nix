@@ -4,6 +4,14 @@
 {
   programs.alacritty = {
     enable = true;
+
+    # Primer's accessibility palette, every ANSI slot at 9:1 or better on its
+    # near-black background; imported from nixpkgs' alacritty-theme, so no
+    # colour values live here. It feeds everything that speaks ANSI — prompt,
+    # ls, tmux, git. Vim and glow bring their own Dracula and only need not to
+    # clash with the background they inherit.
+    theme = "github_dark_high_contrast";
+
     settings = {
       window = {
         dynamic_padding = true;
@@ -23,37 +31,6 @@
         # middle.
         offset.y = 16;
         glyph_offset.y = 8;
-      };
-
-      colors = {
-        primary = {
-          background = "#0d0c13";
-          foreground = "#ffbdec";
-        };
-        cursor = {
-          text = "#ff271d";
-          cursor = "#ffbdec";
-        };
-        normal = {
-          black = "#2d2e29";
-          red = "#ff5458";
-          green = "#0f995b";
-          yellow = "#fede5d";
-          blue = "#4b5072";
-          magenta = "#b267e6";
-          cyan = "#63f2f1";
-          white = "#d6b3cc";
-        };
-        bright = {
-          black = "#565575";
-          red = "#ff8080";
-          green = "#72f1b8";
-          yellow = "#ffe9aa";
-          blue = "#848bbd";
-          magenta = "#ff7edb";
-          cyan = "#aaffe4";
-          white = "#ebe3e7";
-        };
       };
 
       # Login bash macOS GUI apps inherit launchd's empty env, so each window
