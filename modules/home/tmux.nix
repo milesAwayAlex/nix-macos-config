@@ -3,7 +3,28 @@
 # /usr/share/terminfo. Truecolor is advertised per-outer rather than by
 # pattern because alacritty's terminfo lacks RGB. focus-events is on for
 # editor autoread.
-{ pkgs, ... }:
+{ config, pkgs, ... }:
+let
+  scratchpad = pkgs.writeShellApplication {
+    name = "tmux-scratchpad";
+    runtimeInputs = [ pkgs.tmux ];
+    text = ''
+      # One editor per tmux server, even when called from another session.
+      # The pane option disappears with the editor's pane.
+      pane=$(tmux list-panes -a \
+        -f '#{&&:#{@scratchpad},#{==:#{pane_dead},0}}' -F '#{pane_id}')
+      if [ -z "$pane" ]; then
+        pane=$(tmux split-window -h -l 59 -t "$1" -c "$HOME" \
+          -P -F '#{pane_id}' \
+          ${config.programs.vim.package}/bin/vim "$HOME/.scratchpad.md")
+        tmux set-option -p -t "$pane" @scratchpad 1
+      fi
+      tmux switch-client -c "$2" -t "$pane"
+      tmux select-window -t "$pane"
+      tmux select-pane -t "$pane"
+    '';
+  };
+in
 {
   programs.tmux = {
     enable = true;
@@ -69,6 +90,9 @@
       # the profile bin beside tmux itself, so wherever tmux resolved, glo
       # does too.
       bind g split-window -h -l 59 'pbpaste | glo'
+
+      # Persistent Markdown scratchpad; Vim owns saving and explicit copying.
+      bind e run-shell '${scratchpad}/bin/tmux-scratchpad "#{pane_id}" "#{client_name}"'
 
       # Whole scrollback → macOS clipboard (sharing, feeding to Claude).
       bind y { run-shell 'tmux capture-pane -p -S - | pbcopy'; display-message "scrollback copied" }

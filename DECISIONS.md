@@ -990,3 +990,22 @@ cut to an ellipsis and cells wrapped by character, so a table the terminal
 cannot hold becomes one `**Header:** value` block per row instead; tables that
 fit stay tables. Glow exposes no knob for this: the one option glamour has turns
 cell wrapping off, which clips instead.
+
+## D27 — One persistent Markdown scratchpad, explicit clipboard copy *(2026-09-22)*
+
+**Decision.** `~/.scratchpad.md` is the reusable draft, outside any repository
+and written by Vim rather than managed by Nix. Tmux `prefix e` opens it in a
+59-column side pane with the configured Vim, or focuses its existing pane
+within the same tmux server. Normal saves retain the draft; quitting closes
+the pane. In that buffer only, `,y` copies the whole current document,
+including unsaved edits, to the macOS clipboard. Harper stays opt-in via
+`,sp`, as in other Markdown buffers.
+
+**Why.** A hotkey removes file selection from quick writing, persistence lets
+an unfinished thought survive closing the editor, and reusing the pane avoids
+competing editors for the same file. Copying is deliberate: saving or closing
+a note should not replace something copied elsewhere. `prefix g` previews a
+copied draft through the existing Markdown reader.
+
+**Revisit when.** One draft stops being enough, or scratchpads need to be
+shared across independent tmux servers.

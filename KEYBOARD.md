@@ -53,7 +53,8 @@ tab in the status bar means the prefix is armed.
 | `h j k l` | move between panes |
 | `H J K L` | resize by one cell (repeats; flashes the new size) |
 | `[` | copy mode - `v` select, `y` yank (stays in copy mode; yank lands on the macOS clipboard) |
-| `g` | render clipboard markdown in an 80-column glow split (`q` closes it) |
+| `g` | render clipboard markdown in a 59-column glow split (`q` closes it) |
+| `e` | open `~/.scratchpad.md` in a 59-column Vim split, or focus its existing pane across this server's sessions; quitting Vim closes the pane |
 | `y` | copy the pane's whole scrollback to the macOS clipboard |
 
 ## Vim
@@ -65,7 +66,8 @@ Every custom key from `modules/home/vim/config.vim`; leader is `,`.
 | `,w` | save |
 | `,<CR>` | clear search highlight |
 | `gb` / `gB` | next / previous buffer |
-| `,sp` | prose checking on: vim's own `spell` toggles, and harper-ls starts (see LSP) |
+| `,sp` | enable Harper prose checking for the session (no off toggle; native Vim spelling stays off) |
+| `,y` (scratchpad only) | copy the entire draft, including unsaved edits, to the macOS clipboard; saving and quitting do not copy |
 | `*` / `#` (visual) | search down / up for the selection |
 | `^T` | NERDTree toggle |
 | `^P` | fzf file picker (`:Files`) |

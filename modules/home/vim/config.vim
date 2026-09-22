@@ -71,6 +71,17 @@ nmap gB :bprevious<cr>
 # Harper owns prose spelling; Vim's separate word lists would disagree.
 nnoremap <leader>sp <ScriptCmd>g:HarperEnable()<CR>
 
+# Copy the current draft, including unsaved edits, without moving the cursor.
+# Keep this local to the scratchpad: saving and quitting never copy implicitly.
+augroup scratchpad
+  autocmd!
+  autocmd BufRead,BufNewFile * {
+    if expand('<afile>:p') == expand('~/.scratchpad.md')
+      nnoremap <buffer> <silent> <leader>y <Cmd>%yank +<Bar>echo 'scratchpad copied'<CR>
+    endif
+  }
+augroup END
+
 # Autoclose pairs.
 noremap! "" ""<left>
 noremap! '' ''<left>
