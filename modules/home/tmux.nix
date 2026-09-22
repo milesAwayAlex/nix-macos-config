@@ -62,9 +62,13 @@
       bind P previous-window -a
       bind T swap-window -t 0
 
-      # Render clipboard markdown in an 80-column split (glow's layout
-      # assumes ~80), darwin-only.
-      bind g split-window -h -l 80 'pbpaste | ${pkgs.glow}/bin/glow -p -'
+      # Render clipboard markdown in a reading split, darwin-only. glo
+      # (glow.nix) unwraps the paragraphs and lets glow take the pane's
+      # width, so 59 gives the 55 text columns a monospace line reads best
+      # at, two columns of glow margin each side. Called by name: it sits in
+      # the profile bin beside tmux itself, so wherever tmux resolved, glo
+      # does too.
+      bind g split-window -h -l 59 'pbpaste | glo'
 
       # Whole scrollback → macOS clipboard (sharing, feeding to Claude).
       bind y { run-shell 'tmux capture-pane -p -S - | pbcopy'; display-message "scrollback copied" }

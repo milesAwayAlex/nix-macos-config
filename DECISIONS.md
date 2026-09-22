@@ -965,3 +965,28 @@ keep what the machine alone knows: the account (`alexm` on one, `alex` on the
 other), `work`'s Homebrew history, the state versions. `work`'s derivation
 did not change. The home half of the same split was already
 `modules/home/work.nix`.
+
+## D26 — Markdown stays wrapped on disk, unwrapped in transit *(2026-09-21)*
+
+Prose in markdown files keeps the hard wrap at 80 columns that deno fmt gives
+it: the shape diffs read well in and the one every other tool produces. Reading
+and processing get an unwrapped copy instead, because a 55-column pane turns an
+80-column source into a long-short stutter — glow keeps every source line break
+and has no reflow. So `glo` (`modules/home/glow.nix`) pipes its input through
+`deno fmt --prose-wrap never` before glow, and the tmux reading split
+(`prefix g`, `modules/home/tmux.nix`) pastes the clipboard into it; in vim
+(`modules/home/vim`) `,f` on the buffer runs formatprg — deno, wrapping at 80,
+for the file — while `gq` (and `,f` on a selection, its alias) runs a formatexpr
+that joins the range, for text about to be pasted somewhere narrow or handed to
+a model. One formatter, two directions, chosen by what the text is for; deno was
+already the markdown formatter, so no package was added. The reading width
+itself is 55 text columns, the 55–65 a monospace line reads best at: glow takes
+the terminal's width, so the split is 59 columns, 55 plus glow's two-column
+margins.
+
+*2026-09-22:* `glo` grew a second pass, `modules/home/glo-tables.ts`. Glamour
+lays a table out at the block's full width, every column an equal share, headers
+cut to an ellipsis and cells wrapped by character, so a table the terminal
+cannot hold becomes one `**Header:** value` block per row instead; tables that
+fit stay tables. Glow exposes no knob for this: the one option glamour has turns
+cell wrapping off, which clips instead.

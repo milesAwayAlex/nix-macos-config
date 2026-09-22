@@ -326,12 +326,12 @@ complete on 2026-08-21; the header waited on the gate.
       `terminal-features ",alacritty:RGB"`, focus-events on,
       `bashInteractive` as the shell. Prefix is `C-Space`, since space-as-
       shift means the chord lands on space release and rolling `C-b` breaks;
-      resize flashes the pane size; `prefix g` renders clipboard markdown in
-      an 80-column glow split; `prefix y` copies the whole scrollback to the
-      macOS clipboard; a prefix-armed asterisk sits beside the session tab in
-      status-left. Verify: copy-mode `y` reaching the macOS clipboard over
-      OSC 52 (alacritty `Ms` + `set-clipboard external`). Bindings review is
-      an open offer.
+      resize flashes the pane size; `prefix g` pastes clipboard markdown into
+      `glo` — glow behind deno's unwrap (D26) — in a 59-column split; `prefix y`
+      copies the whole scrollback to the macOS clipboard; a prefix-armed
+      asterisk sits beside the session tab in status-left. Verify: copy-mode `y`
+      reaching the macOS clipboard over OSC 52 (alacritty `Ms` + `set-clipboard
+      external`). Bindings review is an open offer.
 - [x] **Alacritty**: app from nixpkgs through `home.packages`, which HM links
       into `~/Applications/Home Manager Apps`; config in
       `modules/home/alacritty.nix` (exported as `homeModules.alacritty`).

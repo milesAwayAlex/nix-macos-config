@@ -26,6 +26,9 @@ set switchbuf=useopen,usetab,newtab
 set updatetime=300
 set signcolumn=number
 set termguicolors
+# Wrapped display breaks between words, not inside them: an unwrapped
+# markdown paragraph (gq, D26) reads at whatever width the window has.
+set linebreak
 
 # No status line: the ruler rides the command line (vim-sensible would
 # otherwise set laststatus=2).
@@ -280,9 +283,39 @@ autocmd FileType typescript,typescriptreact,javascript,javascriptreact {
 }
 autocmd FileType sql &l:formatprg = g:deps.sqlfluff .. ' format --dialect postgres -'
 
-# Markdown: no LSP formatter anywhere, so gq pipes through deno fmt (already
-# here for TS; it handles md, json and jsonc too).
-autocmd FileType markdown &l:formatprg = g:deps.deno .. ' fmt --ext md -'
+# Markdown: no LSP formatter anywhere, so ,f pipes through deno fmt (already
+# here for TS; it handles md, json and jsonc too), which wraps prose at 80:
+# the shape a file keeps on disk.
+const mdfmt = g:deps.deno .. ' fmt --ext md'
+autocmd FileType markdown &l:formatprg = mdfmt .. ' -'
+
+# gq is the other direction: it joins prose some tool hard-wrapped, the shape
+# a narrow reading pane wants (tmux `prefix g`) and the one to hand a model.
+# formatexpr is what gq runs when it is set, so ,f keeps formatprg.
+def UnwrapMarkdown(): number
+  # Vim also calls this while typing (auto-wrap); that stays vim's own.
+  if mode() =~# '[iR]'
+    return 1
+  endif
+  var last = v:lnum + v:count - 1
+  var src = getline(v:lnum, last)
+  var out = systemlist(mdfmt .. ' --prose-wrap never -', src)
+  if v:shell_error != 0
+    echomsg 'deno fmt: ' .. get(out, 0, 'failed')
+    return 0
+  endif
+  # deno drops the trailing blank lines `ap` selects; without them the
+  # paragraph would run into the next.
+  var blanks = 0
+  while blanks < len(src) && src[-1 - blanks] == ''
+    blanks += 1
+  endwhile
+  out += repeat([''], blanks)
+  deletebufline('%', v:lnum, last)
+  append(v:lnum - 1, out)
+  return 0
+enddef
+autocmd FileType markdown &l:formatexpr = 'UnwrapMarkdown()'
 
 # Same map surface the CoC config used.
 nnoremap <silent> gd :LspGotoDefinition<CR>
