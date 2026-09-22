@@ -506,7 +506,19 @@ in
           # Deploys a guest change from here: the Mac evaluates, the guest builds
           # and activates its own system over lima's ssh. The builder role is not
           # involved, so a guest without it deploys the same way.
-          pkgs.nixos-rebuild
+          (pkgs.nixos-rebuild.overrideAttrs (old: {
+            # The upstream test leaves fixed /tmp directories owned by one
+            # nixbld user, so the next user's build fails. Give each test run
+            # fresh directories with cleanup, keeping both path-length cases.
+            # Remove once nixpkgs' test_tmpdir.py uses unique directories.
+            postPatch = (old.postPatch or "") + ''
+              substituteInPlace tests/test_tmpdir.py \
+                --replace-fail 'with system_tempdir(Path("/tmp/not-too-long")):' \
+                  'with tempfile.TemporaryDirectory(prefix="nr-", dir="/tmp") as path, system_tempdir(Path(path)):' \
+                --replace-fail 'with system_tempdir(Path("/tmp/long" + ("g" * MAX_TMPDIR_LENGTH))):' \
+                  'with tempfile.TemporaryDirectory(prefix="long" + ("g" * MAX_TMPDIR_LENGTH), dir="/tmp") as path, system_tempdir(Path(path)):'
+            '';
+          }))
           devvm-up
           devvm-status
         ]

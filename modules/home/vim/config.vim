@@ -68,7 +68,8 @@ nmap <leader>w :w<cr>
 map <silent> <leader><cr> :noh<cr>
 nmap gb :bnext<cr>
 nmap gB :bprevious<cr>
-nnoremap <leader>sp <ScriptCmd>g:HarperEnable()<CR>:setlocal spell!<CR>
+# Harper owns prose spelling; Vim's separate word lists would disagree.
+nnoremap <leader>sp <ScriptCmd>g:HarperEnable()<CR>
 
 # Autoclose pairs.
 noremap! "" ""<left>

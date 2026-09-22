@@ -219,6 +219,13 @@ the images and the disk sizes are honoured only at creation.
 
 ## When it breaks
 
+- **Mac build: `nixos-rebuild-ng` fails `test_make_tmpdir`.** The upstream
+  test reuses `/tmp/not-too-long` and a fixed long directory without cleaning
+  them up. On macOS they survive the build, owned by that build's `nixbld`
+  user; another build user cannot write there, so Python ignores the test's
+  `TMPDIR`. The host module patches the test to use unique temporary
+  directories with cleanup, retaining both path-length checks and the full
+  test suite. Remove the override when the pinned nixpkgs fixes the test.
 - **`devvm-adopt`: "no host key under /var/lib/devvm/ssh".** The guest is still
   the seed, or the state disk did not mount:
   `just devvm-shell journalctl -u devvm-state-disk -u sshd-keygen` says which.

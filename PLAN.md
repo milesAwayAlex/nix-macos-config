@@ -279,7 +279,10 @@ complete on 2026-08-21; the header waited on the gate.
       pointed at explicitly), taplo, vscode-json / css / html
       (`provideFormatter` on), dockerfile-language-server, markdown-oxide
       (wikilinks, backlink code lens, daily notes), and harper-ls — opt-in via
-      `,sp` / `:Harper` rather than at startup, with `,qf` becoming
+      `,sp` / `:Harper` rather than at startup. Both only enable Harper for
+      the session; neither toggles it off. Native Vim spelling stays off by
+      default so its independent word lists do not compete with Harper's;
+      `:setlocal spell` remains available manually. `,qf` becomes
       `:LspCodeAction only:quickfix` in prose because `LspAutoFix` declines
       any diagnostic carrying more than one candidate, which is every spelling
       suggestion. TypeScript is split by project with the plugin's
