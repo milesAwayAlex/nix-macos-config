@@ -996,7 +996,9 @@ cell wrapping off, which clips instead.
 **Decision.** `~/.scratchpad.md` is the reusable draft, outside any repository
 and written by Vim rather than managed by Nix. Tmux `prefix e` opens it in a
 59-column side pane with the configured Vim, or focuses its existing pane
-within the same tmux server. Normal saves retain the draft; quitting closes
+within the same tmux server, selecting its window through the invoking
+session. An unrelated session links that window instead of switching the
+client to another session. Normal saves retain the draft; quitting closes
 the pane. In that buffer only, `,y` copies the whole current document,
 including unsaved edits, to the macOS clipboard. Harper stays opt-in via
 `,sp`, as in other Markdown buffers.
@@ -1009,3 +1011,41 @@ copied draft through the existing Markdown reader.
 
 **Revisit when.** One draft stops being enough, or scratchpads need to be
 shared across independent tmux servers.
+
+## D28 — Command-@ invokes native window focus system-wide *(2026-09-22)*
+
+**Decision.** Native macOS shortcut 9, "Move focus to active or next window",
+uses logical `⌘@` (Command + physical Caps Lock with our Karabiner remaps). Activation
+merges that entry into `com.apple.symbolichotkeys` and reloads the settings;
+other shortcuts are preserved. The binding applies in every app. Native
+fullscreen and Spaces stay in use.
+
+**Why.** The native action was verified to move focus between fullscreen
+Alacritty windows on separate displays, where Command-backtick did not.
+Reusing it avoids a window-management helper and keeps window focus at the
+UI layer, separate from tmux's Control-based bindings. Command-@ avoids
+Command-J's proximity to Quit on Dvorak and has no common native app binding
+we need to retain.
+
+**Revisit when.** Cycling across apps becomes undesirable, or an app's
+Command-@ action is more valuable than the global shortcut.
+
+## D29 — Explicit, disposable tmux views *(2026-09-22)*
+
+**Decision.** Alacritty keeps opening a plain login shell. Run
+`tmux-view [existing-session]` from another terminal to create and attach a
+temporary grouped session. Omitting the name uses tmux's default current
+session, so the usual single session `0` needs no argument. An existing
+session is required; this command does not create the original session.
+It shares all windows and processes, with its own
+selected window. Detaching or closing that terminal destroys only the view;
+the original session remains. Cleanup is set on the temporary session only,
+after attachment. The scratchpad selects its window in the current session.
+
+**Why.** A second display needs independent window selection, but a detached
+view has no useful state to preserve. Grouped sessions keep processes alive
+without duplicate shells or automatic attachment. Pane layout and active pane
+remain shared within each window; use different windows for independent work.
+
+**Revisit when.** Separate pane selection within one shared window is needed,
+or restoring a particular view's selected window becomes useful.

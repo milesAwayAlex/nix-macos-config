@@ -262,6 +262,33 @@ in
   # Enum of strings here; nix-darwin maps it to the integer the plist holds.
   system.defaults.hitoolbox.AppleFnUsageType = "Do Nothing";
 
+  # Native "Move focus to active or next window" (symbolic hotkey 9).
+  # Merge one entry: CustomUserPreferences would replace every shortcut.
+  # Parameters: Unicode '@', ANSI right bracket (@ in Programmer Dvorak),
+  # Command. Karabiner maps physical Caps Lock to that key.
+  system.activationScripts.postActivation.text =
+    let
+      user = lib.escapeShellArg config.system.primaryUser;
+      shortcut = lib.generators.toPlist { } {
+        enabled = true;
+        value = {
+          type = "standard";
+          parameters = [
+            64
+            30
+            1048576
+          ];
+        };
+      };
+    in
+    ''
+      launchctl asuser "$(id -u -- ${user})" sudo --user=${user} -- \
+        defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys \
+        -dict-add 9 ${lib.escapeShellArg shortcut}
+      launchctl asuser "$(id -u -- ${user})" sudo --user=${user} -- \
+        /System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings -u
+    '';
+
   system.defaults.dock = {
     autohide = true;
 

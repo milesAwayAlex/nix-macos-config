@@ -138,13 +138,32 @@ restarting the Dock.
 | `spaces.spans-displays`, icon appearance | logout |
 | most `NSGlobalDomain` keys | next launch of the app that reads it |
 
-nix-darwin never runs `activateSettings`, which is what System Settings uses to
-make global changes land without a logout. It can be invoked by hand:
+Upstream nix-darwin does not run `activateSettings`. Our native window-focus
+shortcut activation does run it as the primary user to reload that binding.
+It can also be invoked by hand:
 
     /System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings -u
 
 In all these cases `prefs-status` reports `ok` already — the plist is written;
 it is the reader that hasn't noticed.
+
+### Native window-focus shortcut
+
+`modules/darwin/preferences.nix` sets Keyboard → Keyboard Shortcuts → Keyboard
+→ "Move focus to active or next window" to Command-@. It merges only entry 9
+of `com.apple.symbolichotkeys`'s `AppleSymbolicHotKeys` dictionary; using
+`CustomUserPreferences` would overwrite other shortcuts in that dictionary.
+The parameters are Unicode `@` (64), ANSI right bracket (30, @ under Programmer
+Dvorak), and Command (1048576). Karabiner maps physical Caps Lock to that key.
+
+This targeted post-activation write is outside `prefs-status`'s checks of
+`system.defaults`. Read it back after switching with:
+
+    defaults export com.apple.symbolichotkeys - | plutil -extract AppleSymbolicHotKeys.9 xml1 -o - -
+
+The shortcut can also be changed in System Settings; the next switch restores
+the declared binding. Removing the activation code leaves the last value,
+just as removing a `system.defaults` key does.
 
 ## Crossing a nix-darwin version
 

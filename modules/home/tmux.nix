@@ -5,27 +5,64 @@
 # editor autoread.
 { config, pkgs, ... }:
 let
+  view = pkgs.writeShellApplication {
+    name = "tmux-view";
+    runtimeInputs = [ pkgs.tmux ];
+    text = ''
+      if [ "$#" -gt 1 ]; then
+        echo "usage: tmux-view [existing-session]" >&2
+        exit 2
+      fi
+      if [ -n "''${TMUX:-}" ]; then
+        echo "tmux-view: run from a plain shell in another terminal window" >&2
+        exit 1
+      fi
+      if [ "$#" -eq 1 ]; then
+        tmux has-session -t "=$1"
+        session=$1
+      else
+        # Resolve the default before creating a session that could become it.
+        tmux has-session
+        session=$(tmux display-message -p '#{session_id}')
+      fi
+      view=$(tmux new-session -d -t "$session" -s "view-$$" -P -F '#{session_id}')
+      # Also clean up if attachment fails. Only this helper's session is owned.
+      trap 'tmux kill-session -t "$view" 2>/dev/null || true' EXIT
+      # Arm cleanup after attaching: an unattached session would die at once.
+      tmux attach-session -t "$view" \; set-option -t "$view" destroy-unattached on
+    '';
+  };
+
   scratchpad = pkgs.writeShellApplication {
     name = "tmux-scratchpad";
     runtimeInputs = [ pkgs.tmux ];
     text = ''
       # One editor per tmux server, even when called from another session.
       # The pane option disappears with the editor's pane.
-      pane=$(tmux list-panes -a \
+      panes=$(tmux list-panes -a \
         -f '#{&&:#{@scratchpad},#{==:#{pane_dead},0}}' -F '#{pane_id}')
+      # Grouped sessions list the same shared pane more than once.
+      pane=''${panes%%$'\n'*}
+      session=$2
       if [ -z "$pane" ]; then
-        pane=$(tmux split-window -h -l 59 -t "$1" -c "$HOME" \
+        pane=$(tmux split-window -h -l 59 -t "$session:.$1" -c "$HOME" \
           -P -F '#{pane_id}' \
           ${config.programs.vim.package}/bin/vim "$HOME/.scratchpad.md")
         tmux set-option -p -t "$pane" @scratchpad 1
       fi
-      tmux switch-client -c "$2" -t "$pane"
-      tmux select-window -t "$pane"
+      window=$(tmux display-message -p -t "$pane" '#{window_id}')
+      # Select through this session, preserving independent grouped views.
+      # An unrelated session can share the window too, without a second Vim.
+      if ! tmux select-window -t "$session:$window" 2>/dev/null; then
+        tmux link-window -a -s "$window" -t "$session:"
+      fi
       tmux select-pane -t "$pane"
     '';
   };
 in
 {
+  home.packages = [ view ];
+
   programs.tmux = {
     enable = true;
     keyMode = "vi"; # covers both mode-keys and status-keys
@@ -92,7 +129,8 @@ in
       bind g split-window -h -l 59 'pbpaste | glo'
 
       # Persistent Markdown scratchpad; Vim owns saving and explicit copying.
-      bind e run-shell '${scratchpad}/bin/tmux-scratchpad "#{pane_id}" "#{client_name}"'
+      # Session IDs contain '$'; single quotes protect them from the shell.
+      bind e run-shell "${scratchpad}/bin/tmux-scratchpad '#{pane_id}' '#{session_id}'"
 
       # Whole scrollback → macOS clipboard (sharing, feeding to Claude).
       bind y { run-shell 'tmux capture-pane -p -S - | pbcopy'; display-message "scrollback copied" }

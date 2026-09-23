@@ -1,8 +1,9 @@
 # Keyboard chord cheatsheet
 
-Chords provided by the Karabiner rules in
-`modules/home/karabiner/karabiner.json`, written as typed under Programmer
-Dvorak. Mechanics: `ctrl` is consumed by the mapping; `shift`/`option` pass
+Chords written as typed under Programmer Dvorak. Command-@ is a native macOS
+shortcut managed by `modules/darwin/preferences.nix`; the other system-wide
+chords come from `modules/home/karabiner/karabiner.json`.
+Karabiner mechanics: `ctrl` is consumed by Ctrl mappings; `shift`/`option` pass
 through where noted; `cmd` chords exist only where listed - every other
 `ctrl+cmd+…` combination passes through raw to macOS.
 
@@ -14,6 +15,7 @@ through where noted; `cmd` chords exist only where listed - every other
 | `^[` | Escape | - |
 | `^M` | Return | `shift`/`option` pass through · `^⌘M` → ⌘Return ("send" in most chat/mail apps) |
 | `^H` | Backspace | `option` → word-delete · `^⌘H` → ⌘⌫ (delete to line start) · in terminals this posts DEL (0x7f), not raw 0x08 |
+| `⌘@` | native "Move focus to active or next window", including across fullscreen displays | system-wide, across apps; Command + physical Caps Lock with our remaps |
 
 ## GUI apps only (not in Alacritty)
 
@@ -54,8 +56,21 @@ tab in the status bar means the prefix is armed.
 | `H J K L` | resize by one cell (repeats; flashes the new size) |
 | `[` | copy mode - `v` select, `y` yank (stays in copy mode; yank lands on the macOS clipboard) |
 | `g` | render clipboard markdown in a 59-column glow split (`q` closes it) |
-| `e` | open `~/.scratchpad.md` in a 59-column Vim split, or focus its existing pane across this server's sessions; quitting Vim closes the pane |
+| `e` | open `~/.scratchpad.md` in a 59-column Vim split, or select its existing window in this session; quitting Vim closes the pane |
 | `y` | copy the pane's whole scrollback to the macOS clipboard |
+
+Alacritty opens a plain login shell. For a second view of an existing session,
+run `tmux-view` from another terminal window. With one session (usually `0`),
+it uses that session; with several, it uses tmux's default current session.
+Use `tmux-view work` to choose a session explicitly (`tmux ls` lists names).
+The view shares windows and processes but has
+its own selected window. `prefix d` returns to the shell and discards the
+view; closing the terminal discards it too. The original session persists.
+Panes and the active pane within each shared window are shared, so select
+different windows for independent work on two displays.
+
+The scratchpad stays in the invoking session. If its window belongs to an
+unrelated session, that window is linked into the current session too.
 
 ## Vim
 
