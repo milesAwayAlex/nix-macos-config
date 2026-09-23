@@ -808,12 +808,72 @@ wrong: the guest is NixOS, whose nix module declares `kvm` in
 Nix binds `/dev/kvm` into the sandbox when it exists and warns when it does
 not, and `runInLinuxVM` starts qemu with `accel=kvm:tcg`, which falls back to
 emulation — exactly what nix-darwin's linux-builder does, and how it built a
-disk image in minutes. With nesting on, that same image VM became a
-second-level guest under Apple's hypervisor, every exit a round trip through
-macOS, and its I/O-bound steps ran for over twenty minutes without finishing.
-The VM steps behind the feature are short and exit-dense, so TCG is the
-better engine for them; nesting comes back for a guest that needs a real VM
-of its own.
+disk image in minutes. With nesting on, that same image VM ran for over
+twenty minutes without finishing. This was initially attributed to nested
+virtualization overhead; the reproduction below supersedes that diagnosis.
+
+*2026-09-22:* Re-enabled nesting on the M4 Pro to investigate. With macOS
+15.8, lima 2.1.3, an outer Linux 6.18.52, QEMU 10.2.4 and an inner Linux
+6.18.53, a small `runInLinuxVM` build passed under forced TCG in 33 seconds.
+Individual KVM runs could finish in 14–19 seconds, but other runs hung or
+reported `synchronous external abort`, sometimes followed by
+`Kernel panic - not syncing: Attempted to kill init!`. Two concurrent KVM
+builds reproduced the failure; preallocating RAM did not cure it, nor did
+disabling pointer authentication in a separate test. Booting a temporary
+guest generation with Linux 7.2.7 also failed the concurrent test, including
+single-vCPU guests and guests pinned to disjoint sets of outer CPUs. These
+are nested guest boot/runtime faults, not evidence that TCG is inherently
+faster at building images. The component responsible is not yet isolated.
+
+`just devvm-kvm-check` now exercises two concurrent VM-backed builds with
+KVM required, and `just devvm-kvm-check tcg` forces emulation as a control.
+Each invocation changes the derivations to avoid cached successes, bounds
+each QEMU run, and captures serial output with carriage returns removed:
+the remote Nix logger otherwise showed blank lines in place of kernel
+diagnostics. Keep nesting off until the KVM reproducer passes reliably on
+the intended host; `kvm` remains advertised for Nix's TCG-compatible image
+builds. A passing single boot is insufficient.
+
+*2026-09-22, SSH transport measurement:* Keep `ssh.overVsock = false` as a
+low-priority performance tradeoff. On the M4 Pro, macOS 15.8, Lima 2.1.3,
+Linux 6.18.52 guest (6 CPUs, 8 GiB), measured TCP, then vsock, then TCP again,
+restoring the exact instance YAML afterwards. SSH compression was off,
+using Lima's AES-preferring SSH configuration and its normal login user.
+The builder uses the same port and cipher preference; these are transport
+microbenchmarks, not timings of complete Nix builds.
+
+| Measurement (median) | TCP before / after | vsock |
+|---|---|---|
+| Fresh SSH connection running `true`, 10 samples | 76 / 121 ms | 124 ms |
+| `true` over a dedicated ControlMaster, 10 samples | 9.9 / 9.5 ms | 9.5 ms |
+| Small echo round trip in an existing SSH channel, 200 samples | 248 / 231 µs | 220 µs |
+| Guest → Mac, 512 MiB, 5 samples | 1.487 / 1.445 s | 1.328 s |
+| Mac → guest, 512 MiB, 5 samples | 1.601 / 1.550 s | 1.106 s |
+
+Bulk tests used fresh SSH connections with `dd`, `/dev/zero` and `/dev/null`
+to exclude disk speed: guest `dd if=/dev/zero bs=1M count=512 status=none`
+for downloads, `dd of=/dev/null bs=1M count=512 iflag=fullblock status=none`
+for uploads. Vsock improved throughput about 9–12% down and 40–45% up;
+the observed time saving scales to about 0.25–0.3 s/GiB down and 0.9–1 s/GiB
+up. Startup varied between boots and showed no vsock advantage. This setting
+does not change virtiofs mounts or the guest agent's existing vsock transport.
+
+Clean SSH exits did not leak in this test. Killing three authenticated host
+SSH clients, each with a silent remote `sleep 120`, left `NConnections=4`
+after two seconds: Lima's master plus all three abandoned connections.
+Restarting with TCP restored `NConnections=0`. The leak therefore remains
+reproducible independently of Nix.
+
+The installed and inspected upstream Lima `vsock_forwarder.go` were identical.
+The [VZ connection wrapper](https://github.com/Code-Hex/vz/blob/v3.7.1/socket.go)
+exposes `Close` but not `CloseRead`/`CloseWrite`. A candidate upstream fix is
+to propagate half-closes through that wrapper, verifying both abandoned
+connection cleanup and replies sent after client EOF. That path is untested;
+do not assume Apple cannot support it merely because the wrapper omits it.
+Guest `ClientAliveInterval`/`ClientAliveCountMax` could bound abandoned-session
+lifetime, but would need testing and would still permit bursts to exhaust the
+64 slots. Neither workaround is worth carrying for the measured gain today.
+Revisit if SSH transfer time becomes significant or upstream fixes cleanup.
 
 **Revisit when.** A machine wants a role set neither output has — a third line
 in the flake, and the question of whether the sets should be composed there
@@ -993,7 +1053,7 @@ cell wrapping off, which clips instead.
 
 ## D27 — One persistent Markdown scratchpad, explicit clipboard copy *(2026-09-22)*
 
-**Decision.** `~/.scratchpad.md` is the reusable draft, outside any repository
+**Decision.** `~/.scratchpad/scratchpad.md` is the reusable draft, outside any repository
 and written by Vim rather than managed by Nix. Tmux `prefix e` opens it in a
 59-column side pane with the configured Vim, or focuses its existing pane
 within the same tmux server, selecting its window through the invoking
@@ -1008,6 +1068,14 @@ an unfinished thought survive closing the editor, and reusing the pane avoids
 competing editors for the same file. Copying is deliberate: saving or closing
 a note should not replace something copied elsewhere. `prefix g` previews a
 copied draft through the existing Markdown reader.
+
+The scratchpad has its own working directory and a Nix-managed `.moxide.toml`
+workspace marker. Opening the former `~/.scratchpad.md` with `$HOME` as cwd
+made markdown-oxide index the home directory; macOS privacy logs attributed
+its protected-folder accesses to Alacritty, producing repeated “data from
+other apps” prompts. Containing the workspace avoids those accesses without
+granting broader permissions. Existing drafts move from `~/.scratchpad.md`
+to `~/.scratchpad/scratchpad.md`; the draft itself remains unmanaged.
 
 **Revisit when.** One draft stops being enough, or scratchpads need to be
 shared across independent tmux servers.
@@ -1049,3 +1117,18 @@ remain shared within each window; use different windows for independent work.
 
 **Revisit when.** Separate pane selection within one shared window is needed,
 or restoring a particular view's selected window becomes useful.
+
+## D30 — Tmux split widths and movement keys *(2026-09-22)*
+
+**Decision.** Tmux `prefix s` opens a 59-column side pane; `prefix S` opens
+an 84-column one. The existing directory convention remains: lowercase
+inherits the current pane's directory, uppercase uses the session's start
+directory. The reading and scratchpad bindings keep their 59-column width.
+
+After the prefix, `h/j/k/l` select panes, `H/J/K/L` resize them, and
+`Ctrl-a/Ctrl-e` swap the current window left/right and follow it. This leaves
+`Ctrl-h` available for its familiar delete behavior. Movement and resizing
+are repeatable. Adjacent swaps wrap natively at the ends; wrapping exchanges
+the first and last windows. Explicit source selection prevents a marked
+window from taking the current window's place as the swap source. `T`
+is unbound; there are no separate beginning/end movement keys.

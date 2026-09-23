@@ -219,6 +219,38 @@ the images and the disk sizes are honoured only at creation.
 
 ## When it breaks
 
+- **VM-backed builds hang or panic with nested virtualization enabled.**
+  On the tested M4/macOS 15.8 setup, concurrent KVM guests can fault with
+  `synchronous external abort` before the build script starts (D22).
+  Nesting stays off by default; the advertised `kvm` feature still allows
+  Nix image builds to use TCG. This is a reliability workaround, not a
+  general performance recommendation.
+
+  `just devvm-kvm-check tcg` runs two fresh VM-backed builds with TCG forced.
+  To compare real KVM, temporarily expose `/dev/kvm` in the instance. This
+  restarts the builder and its containers; it does not change the template:
+
+      limactl stop devvm
+      cp ~/.lima/devvm/lima.yaml ~/.lima/devvm/lima.yaml.before-kvm
+      sed 's/^nestedVirtualization: false$/nestedVirtualization: true/' ~/.lima/devvm/lima.yaml.before-kvm > ~/.lima/devvm/lima.yaml
+      limactl start devvm --tty=false
+      just devvm-kvm-check
+
+  The KVM check refuses to fall back to TCG. Repeat it to check intermittent
+  failures; each invocation bypasses previously built probe outputs. Both
+  modes run two six-vCPU, 1 GiB guests and limit each QEMU run to 120 seconds,
+  excluding dependency downloads. Serial logs are included in the build
+  output, including when the guest hangs. Restore the normal configuration
+  after testing:
+
+      limactl stop devvm
+      cp ~/.lima/devvm/lima.yaml.before-kvm ~/.lima/devvm/lima.yaml
+      limactl start devvm --tty=false
+
+  Use the saved YAML rather than `limactl edit --nested-virt`: with lima
+  2.1.3 that command also replaced newlines in the readiness script with
+  literal `#magic___^_^___line` markers during this investigation.
+
 - **Mac build: `nixos-rebuild-ng` fails `test_make_tmpdir`.** The upstream
   test reuses `/tmp/not-too-long` and a fixed long directory without cleaning
   them up. On macOS they survive the build, owned by that build's `nixbld`
@@ -273,7 +305,11 @@ the images and the disk sizes are honoured only at creation.
   them at 64; `just devvm-shell systemctl show sshd-vsock.socket -p
   NConnections -p NRefused` shows the count. Re-sync the instance copy as
   under *What a change costs* and start; a restart alone only resets the
-  count.
+  count. Keeping TCP costs little in the measured workload: the M4 Pro
+  comparison in D22 found vsock saved about 0.25–0.3 s/GiB downloaded and
+  0.9–1 s/GiB uploaded over SSH, with no clear interactive benefit. Virtiofs
+  and the guest agent's vsock connection are unaffected. Leave this off until
+  upstream fixes cleanup or SSH transfers become a measured bottleneck.
 - **kubectl: "context was not found for specified context: devvm".** VM
   stopped, or the kubeconfig probe timed out
   (`just devvm-shell journalctl -u k3s -u devvm-kubeconfig`); `kubectx` to

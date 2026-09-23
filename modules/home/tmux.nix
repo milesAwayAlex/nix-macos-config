@@ -35,7 +35,10 @@ let
 
   scratchpad = pkgs.writeShellApplication {
     name = "tmux-scratchpad";
-    runtimeInputs = [ pkgs.tmux ];
+    runtimeInputs = [
+      pkgs.tmux
+      pkgs.coreutils
+    ];
     text = ''
       # One editor per tmux server, even when called from another session.
       # The pane option disappears with the editor's pane.
@@ -45,9 +48,11 @@ let
       pane=''${panes%%$'\n'*}
       session=$2
       if [ -z "$pane" ]; then
-        pane=$(tmux split-window -h -l 59 -t "$session:.$1" -c "$HOME" \
+        directory="$HOME/.scratchpad"
+        mkdir -p "$directory"
+        pane=$(tmux split-window -h -l 59 -t "$session:.$1" -c "$directory" \
           -P -F '#{pane_id}' \
-          ${config.programs.vim.package}/bin/vim "$HOME/.scratchpad.md")
+          ${config.programs.vim.package}/bin/vim "$directory/scratchpad.md")
         tmux set-option -p -t "$pane" @scratchpad 1
       fi
       window=$(tmux display-message -p -t "$pane" '#{window_id}')
@@ -62,6 +67,12 @@ let
 in
 {
   home.packages = [ view ];
+
+  # Keep Markdown workspace discovery inside the draft's directory, even
+  # when the file is opened from a different working directory.
+  home.file.".scratchpad/.moxide.toml".text = ''
+    # Workspace boundary for the Markdown scratchpad; use default settings.
+  '';
 
   programs.tmux = {
     enable = true;
@@ -105,12 +116,12 @@ in
       %endif
 
       # Splits/windows: lowercase inherits the pane's cwd, uppercase uses the
-      # session's start directory.
+      # session's start directory. Side panes use reading/code widths.
       bind v split-window -vc '#{pane_current_path}'
-      bind s split-window -hc '#{pane_current_path}'
+      bind s split-window -h -l 59 -c '#{pane_current_path}'
       bind c new-window -ac '#{pane_current_path}'
       bind V split-window -v
-      bind S split-window -h
+      bind S split-window -h -l 84
       bind C new-window
       bind B switch-client -l
       bind b last-window
@@ -118,7 +129,6 @@ in
       bind q set status
       bind N next-window -a
       bind P previous-window -a
-      bind T swap-window -t 0
 
       # Render clipboard markdown in a reading split, darwin-only. glo
       # (glow.nix) unwraps the paragraphs and lets glow take the pane's
@@ -141,7 +151,7 @@ in
       bind -T copy-mode-vi v send -X begin-selection
       bind -T copy-mode-vi y send -X copy-selection
 
-      # Pane navigation and resize
+      # Pane navigation and resize.
       bind h select-pane -L
       bind j select-pane -D
       bind k select-pane -U
@@ -150,6 +160,11 @@ in
       bind -r J { resize-pane -D; display-message "#{pane_width}x#{pane_height}" }
       bind -r K { resize-pane -U; display-message "#{pane_width}x#{pane_height}" }
       bind -r L { resize-pane -R; display-message "#{pane_width}x#{pane_height}" }
+
+      # Capture the current window before swapping, ignoring a marked window,
+      # then follow it. Relative targets wrap natively; -C runs tmux commands.
+      bind -r C-a run-shell -C 'swap-window -d -s "#{session_id}:#{window_id}" -t "#{session_id}:-1"; select-window -t "#{session_id}:#{window_id}"'
+      bind -r C-e run-shell -C 'swap-window -d -s "#{session_id}:#{window_id}" -t "#{session_id}:+1"; select-window -t "#{session_id}:#{window_id}"'
     '';
   };
 }

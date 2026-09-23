@@ -461,11 +461,10 @@ in
       default = false;
       description = ''
         Let the guest run hardware-accelerated VMs of its own; Apple
-        Virtualization nests from M3 on. Off, the guest has no /dev/kvm and a
-        VM started inside a build runs under TCG, the faster engine for the
-        short, exit-dense VM steps behind the builder's `kvm` feature. On,
-        they become second-level guests, every exit a round trip through
-        macOS.
+        Virtualization nests from M3 on. Disabled by default because nested
+        KVM builds can hang or fault on the tested macOS setup (D22).
+        Without /dev/kvm, VM-backed builds use QEMU's TCG fallback. Use
+        `just devvm-kvm-check` to test KVM before enabling it permanently.
       '';
     };
     disk = lib.mkOption {

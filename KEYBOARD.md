@@ -56,7 +56,7 @@ tab in the status bar means the prefix is armed.
 | `H J K L` | resize by one cell (repeats; flashes the new size) |
 | `[` | copy mode - `v` select, `y` yank (stays in copy mode; yank lands on the macOS clipboard) |
 | `g` | render clipboard markdown in a 59-column glow split (`q` closes it) |
-| `e` | open `~/.scratchpad.md` in a 59-column Vim split, or select its existing window in this session; quitting Vim closes the pane |
+| `e` | open `~/.scratchpad/scratchpad.md` in a 59-column Vim split, or select its existing window in this session; quitting Vim closes the pane |
 | `y` | copy the pane's whole scrollback to the macOS clipboard |
 
 Alacritty opens a plain login shell. For a second view of an existing session,

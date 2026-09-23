@@ -118,3 +118,17 @@ devvm-check:
         'let p = (builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.aarch64-linux;
          in p.runCommand "devvm-probe" { } "uname -srm > $out"')
     echo "built on: $(cat "$out")"
+
+# compare two concurrent VM-backed builds; KVM requires nesting enabled
+devvm-kvm-check accel="kvm":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export DEVVM_PROBE_ACCEL={{ quote(accel) }}
+    export DEVVM_PROBE_ATTEMPT="$(date +%s)-$$"
+    nix build --impure --no-link --keep-going --max-jobs 0 -L --expr '
+      let f = builtins.getFlake (toString ./.);
+      in import ./tests/devvm-kvm.nix {
+        pkgs = f.inputs.nixpkgs.legacyPackages.aarch64-linux;
+        accel = builtins.getEnv "DEVVM_PROBE_ACCEL";
+        attempt = builtins.getEnv "DEVVM_PROBE_ATTEMPT";
+      }'

@@ -76,7 +76,7 @@ nnoremap <leader>sp <ScriptCmd>g:HarperEnable()<CR>
 augroup scratchpad
   autocmd!
   autocmd BufRead,BufNewFile * {
-    if expand('<afile>:p') == expand('~/.scratchpad.md')
+    if expand('<afile>:p') == expand('~/.scratchpad/scratchpad.md')
       nnoremap <buffer> <silent> <leader>y <Cmd>%yank +<Bar>echo 'scratchpad copied'<CR>
     endif
   }
