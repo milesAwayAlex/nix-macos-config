@@ -60,6 +60,7 @@
       export PATH
 
       . ${./prompt.bash}
+      . ${./git-update.bash}
 
       # Machine-local hook (D10), deliberately last: IT/EDR cert exports and
       # anything this machine alone needs on PATH live there. `if`, not `&&`:

@@ -1132,3 +1132,19 @@ are repeatable. Adjacent swaps wrap natively at the ends; wrapping exchanges
 the first and last windows. Explicit source selection prevents a marked
 window from taking the current window's place as the swap source. `T`
 is unbound; there are no separate beginning/end movement keys.
+
+## D31 — Merge the remote base branch with gup/gupp *(2026-09-23)*
+
+**Decision.** Bash functions `gup [-r remote] [branch]` and
+`gupp [-r remote] [branch]` merge a remote base branch into the checked-out
+branch; `gupp` also runs plain `git push` after success. The remote defaults
+to `origin`, and the branch defaults to the remote's advertised HEAD, queried
+each time rather than inferred from a possibly stale local `origin/HEAD`.
+An explicit branch bypasses discovery. Only that branch is fetched, and
+`FETCH_HEAD` identifies the fetched commit even with custom fetch mappings.
+
+Git's normal merge behavior and local-change checks apply; no automatic
+stash or rebase. Fetch or merge failure stops the sequence. The source remote
+does not change the push destination: Git's existing push configuration
+decides that. Detached HEAD is rejected. These are shell functions alongside
+the existing shortcuts, not Git aliases or replacements for `git pull`.
