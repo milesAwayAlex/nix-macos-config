@@ -65,7 +65,7 @@ _git_update_base() {
   # custom remote fetch mapping. A deleted branch fails instead of merging a
   # stale remote-tracking ref. Git owns merge policy and local-change checks.
   git fetch -- "$remote" "refs/heads/$branch" || return
-  git merge -- FETCH_HEAD || return
+  git merge --no-edit -- FETCH_HEAD || return
   if [ "$command" = gupp ]; then
     git push
   fi
