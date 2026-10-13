@@ -121,7 +121,7 @@ in
       bind s split-window -h -l 59 -c '#{pane_current_path}'
       bind c new-window -ac '#{pane_current_path}'
       bind V split-window -v
-      bind S split-window -h -l 84
+      bind S split-window -h -l 84 -c '#{pane_current_path}'
       bind C new-window
       bind B switch-client -l
       bind b last-window
