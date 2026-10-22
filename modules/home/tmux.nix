@@ -99,10 +99,13 @@ in
       set -g activity-action none
       set -g bell-action none
 
-      # Minimal status: centered window list, transparent bar, clock only.
-      set -g status-justify centre
+      # Minimal status: transparent bar, window list right-justified against
+      # the clocks. Local time stays rightmost and unlabelled.  The status line
+      # is strftime'd before #() runs, so a single % inside it would hand date
+      # the local time; %% survives as %.
+      set -g status-justify right
       set -g status-style bg=default,fg=brightblack
-      set -g status-right "%H:%M"
+      set -g status-right "  UTC #(date -u +%%H:%%M) %H:%M"
       # Prefix armed → asterisk beside the session tab.
       set -g status-left "[#S] #{?client_prefix,* ,}"
       set -g pane-border-style fg=black
