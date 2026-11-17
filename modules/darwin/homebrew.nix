@@ -12,7 +12,7 @@
 # stale by design while the app moves itself.
 #
 # Requires `inputs.nix-homebrew.darwinModules.nix-homebrew` alongside it.
-{ ... }:
+{ lib, pkgs, ... }:
 {
   nix-homebrew = {
     enable = true;
@@ -31,6 +31,13 @@
     # nix profile in every interactive shell and silently shadows any tool both
     # sides provide. modules/home/bash appends the prefix instead, so nix wins.
     enableBashIntegration = false;
+    # Brew wants a git before it runs anything, and finding none it installs
+    # the formula — on every switch, since cleanup then removes it. It looks
+    # in three places only: its own opt/git, the Command Line Tools, and this
+    # variable; never PATH, which is where nix-homebrew puts gitMinimal. This
+    # one is consulted last, so a machine with the CLT keeps using theirs
+    # (D16).
+    extraEnv.HOMEBREW_GIT_PATH = lib.getExe pkgs.gitMinimal;
   };
 
   homebrew = {

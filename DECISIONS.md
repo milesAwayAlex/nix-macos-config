@@ -412,6 +412,23 @@ formulae, of which there are none.
 **Revisit when.** An app we want stops self-updating — then it belongs in
 nixpkgs, not here.
 
+*2026-11-17:* Brew's git is named to it. Homebrew 7 checks for a git ≥ 2.30
+at the top of every command and, finding none, runs `brew install git` before
+doing what it was asked — the formula, `gettext` and `pcre2`, on a machine
+that is meant to carry no formulae. It looks in three places only:
+`$HOMEBREW_PREFIX/opt/git`, `$(xcode-select -p)/usr/bin/git` and
+`$HOMEBREW_GIT_PATH`. `PATH` is not one of them, so the `gitMinimal`
+nix-homebrew puts there goes unseen. The work hosts have the Command Line
+Tools and never noticed; `personal`'s switch installed git ahead of the first
+cask, which is what a machine without them does, and `cleanup = "uninstall"`
+leaves the next switch to repeat it.
+`nix-homebrew.extraEnv.HOMEBREW_GIT_PATH` now points at that same
+`gitMinimal`. Brew consults the variable last, so a machine with the CLT
+keeps using theirs, and no host needs the CLT for brew's sake. The "does not
+support Nix-managed installations" line printed beside it is unrelated: a
+support-tier notice brew attaches to every install under nix-homebrew,
+non-fatal and not configurable.
+
 ## D17 — Employer-specific tooling is its own module *(2026-08-20)*
 
 **Decision.** Tools that exist only because of the employer's platform
