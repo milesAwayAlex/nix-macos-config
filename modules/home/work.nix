@@ -10,6 +10,9 @@ let
     SPACELIFT_API_KEY_ID=op://Employee/Spacelift/username
     SPACELIFT_API_KEY_SECRET=op://Employee/Spacelift/credential
   '';
+  claudeEnv = pkgs.writeText "claude-env" ''
+    CLAUDE_CODE_OAUTH_TOKEN=op://Private/Sparelabs Claude API Key/credential
+  '';
 in
 {
   home.packages = with pkgs; [
@@ -36,5 +39,11 @@ in
   # key's public half under IdentitiesOnly.
   programs.ssh.includes = [ "~/.ssh/1Password/config" ];
 
-  programs.bash.shellAliases.spacectl = "op run --env-file=${spaceliftEnv} -- ${pkgs.spacectl}/bin/spacectl";
+  programs.bash.shellAliases = {
+    spacectl = "op run --env-file=${spaceliftEnv} -- ${pkgs.spacectl}/bin/spacectl";
+    # By name, not store path: the native installer owns the binary (D13).
+    # --no-masking because masking pipes stdout through op, and the TUI then
+    # finds no terminal.
+    claude = "op run --no-masking --env-file=${claudeEnv} -- claude";
+  };
 }

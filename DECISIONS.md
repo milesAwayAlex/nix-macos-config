@@ -577,6 +577,14 @@ something to do silently inside someone else's script. The cost is that
 aliases only cover interactive shells; a script that needs the credentials
 says `op run` itself.
 
+**A full-screen tool takes `--no-masking`.** Masking works by piping the
+child's stdout and stderr through `op`, so the child sees no terminal —
+measured: `[ -t 1 ]` fails under plain `op run` and passes with the flag.
+Second instance: `claude` on the work hosts, with `CLAUDE_CODE_OAUTH_TOKEN`.
+The cost is that a value the tool prints is no longer redacted; the variable
+is also inherited by every command the agent runs, which is the point — it is
+the agent's own credential.
+
 **The reference file is a store path**, named directly rather than linked
 into `$HOME`. There is nothing in it to protect, and `home.file` would have
 put the same bytes in the world-readable store anyway — it links store paths
