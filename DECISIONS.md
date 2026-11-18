@@ -577,13 +577,15 @@ something to do silently inside someone else's script. The cost is that
 aliases only cover interactive shells; a script that needs the credentials
 says `op run` itself.
 
-**A full-screen tool takes `--no-masking`.** Masking works by piping the
-child's stdout and stderr through `op`, so the child sees no terminal —
-measured: `[ -t 1 ]` fails under plain `op run` and passes with the flag.
-Second instance: `claude` on the work hosts, with `CLAUDE_CODE_OAUTH_TOKEN`.
-The cost is that a value the tool prints is no longer redacted; the variable
-is also inherited by every command the agent runs, which is the point — it is
-the agent's own credential.
+**A long-lived interactive tool reads instead of runs.** `op run` stays alive
+as the tool's parent, so the foreground process is `op` — tmux names the
+window after it — and masking pipes the tool's output through `op`, so a TUI
+finds no terminal. For such a tool the shape is a shell function: `op read`
+the reference into a function-local variable and hand it to the binary as a
+one-command assignment. Still never exported, never on disk; the shell holds
+the value only while the function runs. Instance: `claude` on the work hosts,
+with `CLAUDE_CODE_OAUTH_TOKEN` — inherited by every command the agent runs,
+which is the point, it is the agent's own credential.
 
 **The reference file is a store path**, named directly rather than linked
 into `$HOME`. There is nothing in it to protect, and `home.file` would have
