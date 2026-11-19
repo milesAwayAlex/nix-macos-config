@@ -1220,3 +1220,69 @@ stash or rebase. Fetch or merge failure stops the sequence. The source remote
 does not change the push destination: Git's existing push configuration
 decides that. Detached HEAD is rejected. These are shell functions alongside
 the existing shortcuts, not Git aliases or replacements for `git pull`.
+
+## D32 — Builds trust the endpoint scanner through the daemon's CA variable *(2026-11-18)*
+
+**Decision.** On the work hosts the nix daemon's `NIX_SSL_CERT_FILE` is
+`/etc/nix/build-ca-certificates.crt`, a link every switch aims: at the bundle
+the endpoint scanner builds for nix when that file is readable, at the bundle
+nix-darwin would have used when it is not (`modules/darwin/work.nix`). Only
+the daemon's launchd environment is set; shells and `nix.conf` are left as
+they were.
+
+**Why.** The scanner re-signs TLS to the package hosts — Go's proxy, GitHub,
+npm, crates.io, PyPI; not cache.nixos.org — under its own root, which is in
+the macOS keychain and in the per-tool bundles it maintains. Its nix rule
+writes `ssl-cert-file` into nix.conf, and that covers nix's own downloads
+only. A fixed-output build gets its trust another way: `NIX_SSL_CERT_FILE` is
+in nixpkgs' `proxyImpureEnvVars`, so it is taken from the *daemon's
+environment*, where nix-darwin puts `/etc/ssl/certs/ca-certificates.crt`, and
+cacert's setup hook copies it to `SSL_CERT_FILE`. That bundle has no scanner
+root, so every fetcher that verifies failed on "certificate signed by unknown
+authority": Go modules, npm and cargo vendoring, git. It went unseen because
+`fetchurl` with a real hash skips verification altogether, and that is most
+fetches.
+
+**Why a link, and not the scanner's path in the variable.** The variable is
+not only what builds are handed: it is also the daemon's own `ssl-cert-file`
+wherever nix.conf does not set one, and nix does not check that the file
+exists. Measured with nix 2.34.9: a path that is not there fails every
+download with curl 77, substitution from cache.nixos.org included. Naming the
+scanner's file outright would do that to any work laptop the scanner has not
+reached. The link costs one line of activation and a path without spaces in
+it. What it does not do is follow the scanner between switches: installed
+after a switch, builds keep failing as before until the next one; removed
+after a switch, the link dangles and the daemon's downloads fail until the
+next one — the same exposure the scanner's own nix.conf line already carries.
+
+**Why not the alternatives.** `security.pki.certificateFiles` wants the
+certificate at evaluation time, which puts the employer's root, organisation
+id in its name, in a public repo and breaks at rotation. `nix.envVars` is
+nix-darwin's internal option and also rewrites the variable in every shell,
+where the scanner already exports its own (D10). nix's `impure-env` setting
+would hand builds the variable without touching the daemon's own downloads,
+but it is experimental and its value is split on whitespace.
+
+**Known, and left alone.**
+- A **placeholder hash** in `fetchurl` or `fetchFromGitHub` still fails with
+  a TLS error: for that case alone nixpkgs sets `SSL_CERT_FILE` to cacert's
+  own bundle in the store, which nothing here reaches.
+- The scanner writes its nix.conf block **into the nix store**:
+  `/etc/nix/nix.conf` is a link to nix-darwin's generated file, and the write
+  goes through it. `nix store verify` reports that path as modified, a repair
+  would remove the block, and every switch that regenerates nix.conf drops it
+  until the scanner's drift repair puts it back. Harmless so far. The daemon
+  no longer depends on the block, but the `nix` you run does — a flake fetch
+  from GitHub happens in the client, whose environment still names the stock
+  bundle — so it stays the scanner's to maintain.
+- `just switch` builds as root, where sudo has reset the variable. Untested
+  whether such a build goes through the daemon; `just build` first is the
+  order that certainly does.
+- Outside a build, nixpkgs' curl falls back to the macOS keychain, so a test
+  from a shell passes whatever bundle it is given. `--cacert` switches the
+  fallback off; a probe derivation is the honest test.
+
+**Revisit when.** The scanner's nix rule covers the daemon's environment
+itself, or nix hands fixed-output builds its own `ssl-cert-file` — either
+makes the link redundant. Or `sandbox` is turned on here: the link's target
+is outside the store, and a sandboxed build cannot read it (NixOS/nix#12698).

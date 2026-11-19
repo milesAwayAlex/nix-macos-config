@@ -21,7 +21,15 @@ Declarative macOS machine configuration: flake-based nix-darwin + home-manager (
 - Inputs are a matched 26.05 release-train set (nixpkgs-26.05-darwin + nix-darwin-26.05 + home-manager release-26.05) — bump all three together, never individually (D6).
 - A **placeholder `hash`** in a `fetchFromGitHub`/`fetchurl` fails here with a
   TLS error rather than a hash mismatch. Get the real hash out of band
-  (`nix hash path` on an extracted tree); the network is not the problem.
+  (`nix hash path` on an extracted tree); the network is not the problem. The
+  work hosts' endpoint scanner re-signs TLS to the package hosts, and for a
+  placeholder hash alone nixpkgs verifies against cacert's own bundle, which
+  nothing here reaches. Fetchers that always verify — Go modules, npm, cargo,
+  git — get the scanner's bundle through the nix daemon's environment (D32):
+  if one of those reports an unknown authority, check where
+  `/etc/nix/build-ca-certificates.crt` points and `just switch` to re-aim it.
+  A `curl` from a shell proves nothing either way — it falls back to the
+  keychain.
 - Homebrew is the appliance tier: **casks only, and only casks that
   self-update** (D16). Two bites. `cleanup` is off, so deleting a line here
   does not remove the app from a machine that already has it. And

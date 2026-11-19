@@ -30,6 +30,13 @@ let
         jq -c '{Username: "oauth2accesstoken", Secret: .credential.access_token, ExpiresAt: .credential.token_expiry}'
     '';
   };
+
+  # The CA bundle the employer's endpoint scanner builds for nix and keeps
+  # current: the stock roots, the machine's, and its own.
+  scannerCaBundle = "/Library/Application Support/AikidoSecurity/EndpointProtection/run/endpoint-protection-nix-combined-ca.pem";
+  # What the nix daemon is pointed at instead of either bundle by name: a
+  # link, aimed at every switch (below).
+  buildCaBundle = "/etc/nix/build-ca-certificates.crt";
 in
 {
   imports = [
@@ -65,6 +72,30 @@ in
       # is not self-updating, which is what rules it out under D16.
       "1password-cli"
     ];
+
+  # The endpoint scanner re-signs TLS to the package hosts — Go's proxy,
+  # GitHub, npm, crates.io, PyPI — under a root of its own. Its nix rule puts
+  # `ssl-cert-file` in nix.conf, which covers nix's own downloads; a
+  # fixed-output build is handed NIX_SSL_CERT_FILE from the daemon's
+  # *environment* instead, where nix-darwin puts the stock bundle, so every
+  # fetcher that verifies — Go modules, npm and cargo vendoring, git — fails
+  # on an unknown authority (D32). The daemon gets the scanner's bundle, then,
+  # and through a link rather than by name: the same variable decides the
+  # daemon's own downloads wherever nix.conf does not, and a path that is not
+  # there fails those outright, substitution included. Each switch aims the
+  # link at the scanner's bundle when it is readable and at the bundle
+  # nix-darwin would have used when it is not, so a laptop the scanner has
+  # not reached behaves as it did. The daemon alone: shells have the
+  # scanner's own exports (D10).
+  launchd.daemons.nix-daemon.serviceConfig.EnvironmentVariables.NIX_SSL_CERT_FILE = buildCaBundle;
+  system.activationScripts.preActivation.text = ''
+    install -d -m 0755 /etc/nix
+    if [ -r ${lib.escapeShellArg scannerCaBundle} ]; then
+      ln -sfn ${lib.escapeShellArg scannerCaBundle} ${buildCaBundle}
+    else
+      ln -sfn ${config.environment.variables.NIX_SSL_CERT_FILE} ${buildCaBundle}
+    fi
+  '';
 
   # Local Linux VM (PLAN.md Phase 8): which guest a work host runs, and what
   # it gives it.
