@@ -672,6 +672,11 @@ last gate condition closed when a work repo's CI harness ran out of
       with no LoadBalancer service it creates nothing, so keeping it makes
       turning traefik back on a one-word change. The failure without it is loud
       (an Ingress simply does nothing), the same test the emulation bullet uses.
+      *2026-11-18: klipper-lb binds nothing — its ports are iptables rules,
+      which lima forwards only through the guest agent's `kubectl` watch, and
+      the agent had no `kubectl`. The first LoadBalancer service the cluster
+      ever saw answered in the guest and not on the Mac; fixed in the guest,
+      D22.*
 - [x] **Visibility.** Four questions, four tools, not interchangeable: is the VM
       up (`limactl list`), is the builder usable
       (`nix store info --store ssh-ng://devvm`), what workloads are running

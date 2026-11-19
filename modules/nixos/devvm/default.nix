@@ -173,6 +173,19 @@ in
       # the `limactl shell` access along with it.
       users.mutableUsers = true;
 
+      # Neither lima unit restarts at a switch, though a nixpkgs bump moves the
+      # store paths in both units' text. A guest agent that comes back under a
+      # running host agent costs every forwarded port: lima before 2.3.0 keeps
+      # each listener on the connection it was created with, so 6443 and the
+      # rest accept and reset until the VM restarts (lima-vm/lima#5557).
+      # Holding still loses nothing — the agent's binary is the host's, on the
+      # cidata volume, and only a VM start changes it; of what lima-init does,
+      # a switch needs the share put back, and `devvm-mounts` below does that.
+      # Both, because the agent requires lima-init and systemd propagates the
+      # restart; forced, because nixos-lima asks for lima-init's outright.
+      systemd.services.lima-init.restartIfChanged = lib.mkForce false;
+      systemd.services.lima-guestagent.restartIfChanged = false;
+
       # The host mount is lima-init's, from the seed's user-data, and cannot be
       # declared in `fileSystems`: the virtiofs tag is lima's sha256 over
       # location, a NUL byte and mount point, and a Nix string cannot hold the
@@ -445,14 +458,14 @@ in
         role = "server";
 
         # traefik exists to serve Ingress, and serving it means a LoadBalancer
-        # service that klipper-lb satisfies by binding 80 and 443 on the node,
-        # which lima then forwards to the Mac's localhost for as long as the VM
-        # is up. Worth that only once something here actually deploys Ingress
-        # manifests. metrics-server stays: it is what fills k9s's CPU and memory
-        # columns. local-storage stays: it is the default StorageClass, so PVCs
-        # bind instead of hanging. servicelb stays and creates nothing until
-        # something asks for a LoadBalancer, which keeps turning traefik back on
-        # a one-word edit.
+        # service that klipper-lb answers on the node's 80 and 443, which lima
+        # then forwards to the Mac's localhost for as long as the VM is up
+        # (the guest agent's watch, below). Worth that only once something
+        # here actually deploys Ingress manifests. metrics-server stays: it is
+        # what fills k9s's CPU and memory columns. local-storage stays: it is
+        # the default StorageClass, so PVCs bind instead of hanging. servicelb
+        # stays and creates nothing until something asks for a LoadBalancer,
+        # which keeps turning traefik back on a one-word edit.
         disable = [ "traefik" ];
 
         # k3s's own component images, pinned by the flake rather than by
@@ -471,6 +484,14 @@ in
           "--kubelet-arg=image-gc-low-threshold=90"
         ];
       };
+
+      # lima forwards the ports something listens on, and a NodePort or a
+      # LoadBalancer port is an iptables rule with no socket behind it. For
+      # those the guest agent watches Services instead, through whichever
+      # `kubectl` is on its PATH — and with none there it retries forever
+      # without a word, and the service answers in the guest and nowhere else.
+      # k3s's own: the agent is root, and finds k3s.yaml by itself.
+      systemd.services.lima-guestagent.path = [ config.services.k3s.package ];
 
       # k3s names its cluster, context and user `default`, and same-named
       # entries collide when the Mac merges the file with its own kubeconfig.

@@ -303,6 +303,10 @@ let
             printf '   pods     '
             KUBECONFIG="$kubeconfig" kubectl get pods -A --no-headers 2>/dev/null |
               awk '{c[$4]++} END {for (s in c) printf "%s=%s ", s, c[s]; print ""}'
+          elif limactl shell "$name" sudo k3s kubectl get --raw /readyz >/dev/null 2>&1; then
+            # ssh rides a forward of its own, so everything above this line
+            # stays green while lima's port forwards are dead.
+            echo "   api      up in the guest, unreachable from here: a stale forward — \`limactl restart $name\` (DEVVM.md, When it breaks)"
           else
             echo "   api      unreachable"
           fi

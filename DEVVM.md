@@ -174,6 +174,17 @@ long as `devvm.dockerShims` is off for the host.
   `~/.kube/config`, gcloud keeps writing there, and the context vanishes with
   the VM: a missing file is skipped, and kubectl fails fast if the current
   context was in it, where a dead 6443 would hang.
+- **Ports** in the guest appear on the Mac's `127.0.0.1` under the same
+  number, for as long as the VM runs: lima's guest agent reports what it
+  finds and the host agent listens for it. It finds two kinds. Anything with
+  a listening socket — a `nerdctl run -p`, a `hostNetwork` pod, the API on
+  6443 — within three seconds of the bind. And `NodePort` and `LoadBalancer`
+  services, which are iptables rules with no socket behind them, through a
+  `kubectl` watch: a NodePort under its node port, a LoadBalancer under the
+  service's own `port`. A `ClusterIP` service is neither; that is
+  `kubectl port-forward`. A port the Mac already uses is skipped with a
+  warning in `~/.lima/devvm/ha.stderr.log`, and the listeners are loopback
+  only — nothing here is reachable from the network.
 - **The builder** is transparent: any `aarch64-linux` derivation the daemon is
   asked for goes to the guest. `just devvm-check` is the proof when in doubt.
 - **Registry credentials** are resolved on the Mac and never stored in the
@@ -207,6 +218,7 @@ the images and the disk sizes are honoured only at creation.
 | Change | Where | Then |
 |---|---|---|
 | Anything in the guest's NixOS config | `modules/nixos/devvm` | `just devvm-rebuild` |
+| The lima units themselves, `lima-init` and `lima-guestagent` — the agent's PATH, say | `modules/nixos/devvm` | `just devvm-rebuild`, then `limactl restart devvm`: neither unit restarts at a switch, by design (D22) |
 | Which role set this Mac runs (`devvm.guest`) | `hosts/<host>.nix` | `just switch`, then `just devvm-rebuild .#<name>` once — the hostname follows the attribute from there; the template's kubeconfig copy follows the cluster role, so re-sync the instance copy as above |
 | A role set that does not exist yet | `flake.nix`, one line | as above |
 | CPUs, memory, the shared directory | `hosts/<host>.nix` (`devvm.*`, beside the shims) | `just switch`, re-sync the instance copy, start |
@@ -316,6 +328,29 @@ the images and the disk sizes are honoured only at creation.
   another context meanwhile. **"certificate signed by unknown authority".**
   Another cluster owns localhost:6443 — Rancher Desktop — and lima logged a
   failed forward. Stop it, `limactl restart devvm`.
+- **kubectl: `read: connection reset by peer` or `EOF` on 127.0.0.1:6443, and
+  every other forwarded port does the same, while
+  `just devvm-shell sudo k3s kubectl get nodes` answers.** The forwards are
+  stale: the guest agent restarted under a running host agent, and lima
+  before 2.3.0 keeps each listener on the connection it was created with
+  (lima-vm/lima#5557). `~/.lima/devvm/ha.stderr.log` says
+  `grpc: the client connection is closing` once per attempt, and
+  `devvm-status` names it. ssh rides a forward of its own, so the builder,
+  `limactl shell` and the nerdctl wrappers all keep working, which is how
+  this goes unnoticed. `limactl restart devvm` is the cure; restarting the
+  agent again is not. The cause was a guest generation whose lima units
+  restarted at a switch — any rebuild after a nixpkgs bump — and a rebuild
+  onto this configuration is the last one that can do it. By hand,
+  `systemctl restart lima-guestagent` in the guest still will.
+- **A `LoadBalancer` or `NodePort` service answers in the guest and not on
+  the Mac.** The guest agent has no `kubectl` to watch services with: a
+  generation from before k3s's was on its PATH, or one since, not yet
+  restarted into — `just devvm-rebuild`, `limactl restart devvm`. The check
+  is the watch itself, a `kubectl` process the agent keeps running:
+  `just devvm-shell pgrep -a kubectl` (by name — k3s's multicall binary
+  blanks its arguments). With the watch running, look
+  for the port in `ha.stderr.log`: `Forwarding TCP` when it worked,
+  `failed to listen` when the Mac already had that port.
 - **A pull is refused with `401` or "unauthorized".** The registry is not in
   `devvm.registryAuth`, or its command failed — the wrapper says so on stderr
   before nerdctl runs, and for gcr.io that is usually `gcloud auth login`

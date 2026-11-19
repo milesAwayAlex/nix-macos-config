@@ -902,6 +902,51 @@ lifetime, but would need testing and would still permit bursts to exhaust the
 64 slots. Neither workaround is worth carrying for the measured gain today.
 Revisit if SSH transfer time becomes significant or upstream fixes cleanup.
 
+*2026-11-18:* Neither lima unit restarts at a switch, and the guest agent has
+k3s's `kubectl` on its PATH. Two faults in how ports reach the Mac, found
+together when the cluster got its first service meant to be reached from it.
+
+The first had been live since 2026-11-06. nixos-lima sets
+`restartIfChanged = true` on `lima-init`, the guest agent requires it, and a
+nixpkgs bump changes the store paths in both units' text, so every rebuild
+after `just update` restarted the agent. lima 2.1.3's host agent survives that
+badly: it opens a new gRPC client and closes the old one, but each
+port-forward listener keeps the client it was created with, and the
+restarted agent reports the same ports the host already listens on, so no
+listener is replaced. (The restart of 2026-10-13 healed itself by timing
+alone: k3s was still down when the agent came back, so its ports left and
+returned.) Every forwarded port then accepts and resets —
+`grpc: the client connection is closing` in `ha.stderr.log` — until the
+instance restarts (lima-vm/lima#5557, fixed in 2.3.0; the release train
+carries 2.1.3). The API on 6443 was dead from the Mac for twelve days and
+nothing said so: ssh has a forward of its own, so the builder, `limactl shell`
+and the nerdctl wrappers never noticed, and `devvm-status` reported only "api
+unreachable". Fixed in the guest rather than by carrying a newer lima outside
+the train (D6): `restartIfChanged = false` on both units, forced on
+`lima-init`. Nothing is lost, because the agent's binary lives on the cidata
+volume and changes only at a VM start, and the one thing a switch needs from
+`lima-init` — the share — the guest's `devvm-mounts` activation already does.
+The cost is that a change to either unit lands at the next VM restart, which
+DEVVM.md's table now says. `devvm-status` asks the guest's API when the Mac's
+view of it fails, and names a stale forward when the two disagree.
+
+The second was there from the start. PLAN.md's Phase 8 expected lima to
+forward "the ports klipper-lb binds"; klipper-lb binds nothing. A LoadBalancer
+port is a hostPort and a NodePort is kube-proxy's, both iptables DNAT, and
+lima's socket scan cannot see either. The guest agent has a second detector
+for exactly this — it runs `kubectl get service --watch` and reports NodePort
+and LoadBalancer ports — but it looks `kubectl` up on its own PATH, a systemd
+unit's has none, and the miss is logged at debug level and retried every ten
+seconds forever. With no LoadBalancer service in the cluster since traefik was
+dropped, nothing exercised it. The unit's `path` now carries the k3s package,
+whose `kubectl` is the multicall binary; the agent runs as root and picks
+`/etc/rancher/k3s/k3s.yaml` by itself.
+
+Both come out when they stop being needed: the restart settings once the
+train's lima is 2.3.0 or later *and* nixos-lima no longer forces the restart
+(nixos-lima/nixos-lima#125, open); the PATH entry if nixos-lima ever supplies
+a `kubectl` of its own.
+
 **Revisit when.** A machine wants a role set neither output has — a third line
 in the flake, and the question of whether the sets should be composed there
 rather than enumerated. Or nix-darwin's linux-builder stops putting a private
