@@ -35,6 +35,16 @@
       url = "github:yegappan/lsp";
       flake = false;
     };
+
+    # carman's memory, `cmem`: the client and its Claude Code hook settings,
+    # on the work hosts (D33). The service it talks to is carman's to deploy.
+    # Pinned on its own, outside the release train; bump via
+    # `just update carman`. Only the overlay is used and it builds with our
+    # `pkgs`, so following keeps a second nixpkgs out of the lock.
+    carman = {
+      url = "github:milesAwayAlex/carman";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =

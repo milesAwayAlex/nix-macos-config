@@ -252,6 +252,19 @@ claude   # then sign in
 — it is still churning, so converge-copy would fight the tool rather than
 protect a stable artifact. Revisit if it settles.
 
+On the work hosts `claude` is a shell function that also gives each session
+carman's memory (D33). It needs two things this repo does not make: the
+`carman cmem` item in 1Password, which comes with the account, and the service
+itself on this Mac's dev VM — `scripts/deploy.sh devvm` in the carman repo,
+once the VM is up. Until then a session says at its start that memory could
+not be reached, and works as before.
+
+The same function points a session's git at `gh`'s login for GitHub, so an
+agent's fetch or push does not wait on the ssh key's Touch ID (D34). That
+needs `gh auth login` to have been done on this Mac — without it sessions stay
+on ssh — and `gh auth refresh -s workflow` if agents are to push changes under
+`.github/workflows`.
+
 ## Slack
 
 Not declared — it exists only because of the employer, and it needs an

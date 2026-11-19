@@ -70,7 +70,9 @@ an unfree package, so it needs an `allowUnfreePredicate` admitting
 `1password-cli` on the consuming side — set from the system layer, since
 `useGlobalPkgs` leaves home-manager without a `nixpkgs.config` (D18). It also
 points `ssh` at 1Password's agent socket for every host (D19), which is only
-right on a machine where 1Password is the password manager.
+right on a machine where 1Password is the password manager. And it takes
+`pkgs.carman` from the `carman` flake's overlay (D33), which the consuming
+side has to add the same way.
 
 `darwinModules.homebrew` expects `nix-homebrew.darwinModules.nix-homebrew`
 alongside it; it configures both.

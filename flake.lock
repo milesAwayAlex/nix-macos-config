@@ -17,6 +17,26 @@
         "type": "github"
       }
     },
+    "carman": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1795082858,
+        "narHash": "sha256-1Kyk1K8wQMeQKVvQ5gWzcASfsQBJXNJUyYfNFzdbMZs=",
+        "owner": "milesAwayAlex",
+        "repo": "carman",
+        "rev": "6c5a5597be1af9d17ad3a15b7c7a32056d8ec32f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "milesAwayAlex",
+        "repo": "carman",
+        "type": "github"
+      }
+    },
     "home-manager": {
       "inputs": {
         "nixpkgs": [
@@ -170,6 +190,7 @@
     },
     "root": {
       "inputs": {
+        "carman": "carman",
         "home-manager": "home-manager",
         "nix-darwin": "nix-darwin",
         "nix-homebrew": "nix-homebrew",

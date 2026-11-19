@@ -1,7 +1,12 @@
 # Employer-coupled configuration: things that exist only because of the
 # employer's platform choices, split out so a consumer of these modules can
 # take everything else without them (D17).
-{ lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   # op:// references, `op run` resolves them into spacectl's
   # environment for the length of one command.
@@ -10,6 +15,37 @@ let
     SPACELIFT_API_KEY_ID=op://Employee/Spacelift/username
     SPACELIFT_API_KEY_SECRET=op://Employee/Spacelift/credential
   '';
+
+  # Where the Mac reaches carman's memory service: a LoadBalancer on the dev
+  # VM's cluster, which lima forwards to loopback (DEVVM.md, Ports).
+  cmemUrl = "http://127.0.0.1:8377";
+  # The laptop role's token, for sessions and for the shell alike.
+  cmemToken = "op://Private/carman cmem/laptop";
+  # The memory's hooks for Claude Code, as a file for `claude --settings`:
+  # they call cmem by its store path and carry no secret. Claude Code's own
+  # memory stays on beside it until `disableAutoMemory = true`.
+  cmemSettings = pkgs.carman.cmem-claude-code-settings.override {
+    url = cmemUrl;
+    disableAutoMemory = false;
+  };
+
+  gh = lib.getExe config.programs.gh.package;
+  # What a Claude Code session's git is started with (D34): GitHub's ssh
+  # remotes rewritten to HTTPS, as the environment variables git reads
+  # configuration from. Over HTTPS git asks the login `gh` already holds —
+  # `programs.gh` makes gh the credential helper for github.com — so an
+  # agent's fetch or push never waits on the ssh key's biometric prompt.
+  githubSshPrefixes = [
+    "git@github.com:"
+    "ssh://git@github.com/"
+  ];
+  agentGitEnv = lib.concatStringsSep " " (
+    [ "GIT_CONFIG_COUNT=${toString (builtins.length githubSshPrefixes)}" ]
+    ++ lib.imap0 (
+      i: prefix:
+      "GIT_CONFIG_KEY_${toString i}=url.https://github.com/.insteadOf GIT_CONFIG_VALUE_${toString i}=${lib.escapeShellArg prefix}"
+    ) githubSshPrefixes
+  );
 in
 {
   home.packages = with pkgs; [
@@ -19,6 +55,10 @@ in
     _1password-cli
     spacectl # Spacelift CLI; the API credentials stay outside the repo
     spicedb # run the permissions database locally for development
+    # carman's memory client (D33), from the overlay in
+    # modules/darwin/work.nix. On PATH because an agent runs `cmem note` and
+    # `cmem recall` by name; the hooks do not need it there.
+    carman.cmem
   ];
 
   # 1Password is this machine's ssh agent. Two things about the line itself:
@@ -42,11 +82,37 @@ in
   # and tmux names the window after it (D20). The token is never exported; it
   # reaches claude's environment only. `command` because the native installer
   # owns the binary (D13); mkBefore keeps the ~/.bashrc.local hook last.
+  #
+  # The same function gives every session carman's memory (D33): the hooks
+  # ride in on `--settings`, which adds to ~/.claude/settings.json and leaves
+  # the file the harness's own (D13), and the memory's token arrives the way
+  # claude's does. That read has no `|| return` — a session without its
+  # memory is still a session, and the hook says at the start that it could
+  # not reach the service.
+  #
+  # And it is where a session's git is pointed at gh's login (D34) — the
+  # session's alone, through `env`, which is replaced by claude and so keeps
+  # it the foreground process; a shell's own git still uses the ssh key.
+  # Only when gh is logged in: without a login the session keeps ssh.
+  #
+  # `cmem` typed at a prompt reads the token for that one command. A value
+  # already in the environment wins, which is how a trial service is aimed at.
   programs.bash.initExtra = lib.mkBefore ''
     claude() {
-      local token
+      local token cmem_token
+      local -a git_env=()
       token=$(op read 'op://Private/Sparelabs Claude API Key/credential') || return
-      CLAUDE_CODE_OAUTH_TOKEN=$token command claude "$@"
+      cmem_token=$(op read '${cmemToken}')
+      if ${gh} auth token --hostname github.com >/dev/null 2>&1; then
+        git_env=(${agentGitEnv})
+      fi
+      CLAUDE_CODE_OAUTH_TOKEN=$token CMEM_TOKEN=$cmem_token env "''${git_env[@]}" claude --settings ${cmemSettings} "$@"
+    }
+
+    cmem() {
+      local token=$CMEM_TOKEN
+      [ -n "$token" ] || token=$(op read '${cmemToken}') || return
+      CMEM_URL=''${CMEM_URL:-${cmemUrl}} CMEM_TOKEN=$token command cmem "$@"
     }
   '';
 }

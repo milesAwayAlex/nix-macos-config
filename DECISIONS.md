@@ -1286,3 +1286,120 @@ but it is experimental and its value is split on whitespace.
 itself, or nix hands fixed-output builds its own `ssl-cert-file` — either
 makes the link redundant. Or `sandbox` is turned on here: the link's target
 is outside the store, and a sandboxed build cannot read it (NixOS/nix#12698).
+
+## D33 — Claude Code gets carman's memory through the `claude` function *(2026-11-19)*
+
+**Decision.** On the work hosts every Claude Code session runs with carman's
+memory, `cmem`: the client and its hook settings come from the `carman` flake
+input, and the `claude` function (D20) hands the session both —
+`--settings <store path>` for the hooks, `CMEM_TOKEN` read from 1Password
+beside claude's own token (`modules/home/work.nix`). `cmem` is on PATH, and a
+function of the same name gives a shell the token for one command. Client
+only: the service is a workload on the dev VM's cluster, deployed and owned by
+carman's `scripts/deploy.sh`, reached at `127.0.0.1:8377` through lima's
+forward of its LoadBalancer (DEVVM.md, Ports).
+
+**Why `--settings`.** The hooks have to be in Claude Code's settings, and
+`~/.claude/settings.json` is the harness's (D13). `--settings` adds a file to
+what the harness already loads — measured on 2.1.311: the same model,
+permission mode, plugins, MCP servers and tool count with and without it, and
+subcommands (`mcp list`, `plugin list`, `--version`) pass through — so the
+hooks are declared here and the file the harness rewrites is never touched.
+The settings file is a store path that names the hook by store path: a session
+keeps the client it started with across a switch, and removing the wiring is
+reverting this commit rather than editing a file by hand.
+
+**Why the function.** The token is the session's own credential, the same
+case as `CLAUDE_CODE_OAUTH_TOKEN` in D20 — inherited by the hooks and by every
+`cmem` the agent runs, never exported into the shell, never on disk. Claude's
+token still gates the launch; the memory's does not. If that read fails the
+session starts anyway and the hook says in its first context line that memory
+could not be reached, which is also all that happens with the VM down: the
+hook exits 0 in milliseconds on a refused connection, and gives the service
+three seconds at most.
+
+**Why the work module.** carman is not the employer's, but everything this
+leans on is a work host's: the `claude` function, 1Password (D19) and the
+cluster. It moves to a module of its own when a machine without those wants
+it.
+
+**Why the overlay.** `pkgs.carman` is carman's packages built with this
+repo's nixpkgs, so the input's own nixpkgs is never evaluated and the Go
+toolchain is the release train's. It is set in `modules/darwin/work.nix`,
+where the unfree predicate is and for the same reason (D18).
+
+**Known, and left alone.**
+- The cluster's token Secret is made once, at carman's first deploy, and the
+  1Password item is a copy of it. Deleting the Secret — or the state disk —
+  makes new tokens, and the item has to be written again from carman's side.
+- A second work laptop has the item (it is the account's) but its own VM has
+  no service until carman is deployed there; sessions say so and carry on.
+- Claude Code's built-in memory stays on beside this one until its contents
+  are imported: `disableAutoMemory` in `modules/home/work.nix` is the switch.
+- `cmem` typed at a prompt reads the token even for commands that need none
+  (`cmem scope`); `command cmem` is the binary.
+- The VM is not started at login (PLAN.md backlog). A session opened before
+  `limactl start devvm` has no memory for its whole life.
+
+**Revisit when.** The harness grows a declared-settings file of its own
+(D13's condition, and then the hooks go there); the service moves off the
+laptop's VM, which changes the URL and probably the token's home; or a second
+harness wants the same memory, which is the point to split the module out.
+
+## D34 — An agent's git reaches GitHub with gh's login, not the ssh key *(2026-11-19)*
+
+**Decision.** A Claude Code session on the work hosts is started with git
+configuration in its environment that rewrites GitHub's ssh remotes to HTTPS
+(`GIT_CONFIG_COUNT` and its keys, set by the `claude` function in
+`modules/home/work.nix`). Over HTTPS git asks the credential helper, which
+`programs.gh` already makes `gh auth git-credential` for github.com, so the
+session fetches and pushes with the token `gh` keeps in the keychain and no
+prompt. Remotes are not edited, a shell's own git still uses the ssh key in
+1Password (D19), and the settings are applied only when gh has a login — a
+laptop without one keeps ssh in its sessions too.
+
+**Why.** Every ssh use of the key is approved in 1Password, and an approval
+lasts until 1Password locks. With several sessions open, each lock cost each
+of them a Touch ID at its next fetch or push, and an agent working unattended
+simply stopped there. The prompt was guarding less than it appeared to: `gh`
+is logged in with `repo` scope and an agent calls it freely, so a session
+could already write to any repository the account can — through the API, with
+no prompt. Moving git's transport onto that same credential adds almost
+nothing to what a session holds, and removes the one step that needed a
+person.
+
+**Why the session's environment.** It is the narrowest place that works: the
+agent's git and nothing else. In `programs.git` the rewrite would take the
+ssh key out of every shell as well, and with it the only use of D19 a person
+makes daily. In the environment it also reaches whatever the session runs
+that shells out to git — `gh`, nix's git fetcher — with nothing to remember.
+
+**Why not the alternatives.**
+- *Longer approvals* — 1Password's "remember" setting raised to hours, plus a
+  long `ControlPersist` — make prompts rarer, not absent: a lock, a sleep or a
+  tunnel flap still stops an unattended agent. The setting is made by hand in
+  the app and covers every key the agent holds.
+- *A key on disk for agents* reverses D19 and is as broad as the account.
+- *A fine-grained token* scoped to chosen repositories is the tighter version
+  of this decision, not a different one: read from 1Password at launch like
+  the session's other credentials. It needs the organisation to approve it
+  and narrows the session's `gh` with it. Not yet.
+
+**Known, and left alone.**
+- This removes the last per-session human step before a push. What stands
+  between an agent and a branch is now GitHub's branch protection alone.
+- gh's token has no `workflow` scope, so a push that touches
+  `.github/workflows` is refused over HTTPS where the ssh key would have been
+  let through. `gh auth refresh -s workflow` adds it, by hand.
+- Measured: with ssh made to fail, `ls-remote` and `push --dry-run` succeed
+  against this repo and a private employer one, by their ssh-form URLs, and a
+  session started through the function sees the settings in its shell. The
+  remote-URL include that turns this repo's hooks on (D9) still matches —
+  `insteadOf` changes what git dials, not what the config says.
+- Only github.com. A remote anywhere else still uses the key and still
+  prompts.
+
+**Revisit when.** The employer requires the hardware-backed key for pushes;
+the fine-grained token becomes worth its approval; or 1Password grows an
+approval that outlives a lock for one named key, which would put the agent
+back on ssh.

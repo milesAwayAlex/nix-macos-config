@@ -898,8 +898,11 @@ settled 2026-09-20 — the D25 addendum.
   Today nothing in the VM is needed before a terminal is open, so autostart
   buys the absence of one command per boot for 8 GB committed from login; the
   day a database or a daily service lives on the cluster it stops being
-  optional, and redis and postgres would move there together (D24). Two
-  details settled in advance. `KeepAlive` must be `{ SuccessfulExit = false; }`:
+  optional, and redis and postgres would move there together (D24).
+  *(2026-11-19)*: that workload exists — carman's memory service, which every
+  Claude Code session on `work` now expects (D33); autostart is due and not
+  yet decided. Two details settled in advance.
+  `KeepAlive` must be `{ SuccessfulExit = false; }`:
   `limactl stop` ends the foreground hostagent cleanly and a plain `KeepAlive`
   would restart it ten seconds later, undoing `just devvm-down`; `limactl
   start` on a running instance returns success, so a manual start before the

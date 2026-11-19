@@ -269,7 +269,7 @@ in
   system.activationScripts.postActivation.text =
     let
       user = lib.escapeShellArg config.system.primaryUser;
-      shortcut = lib.generators.toPlist { } {
+      shortcut = lib.generators.toPlist { escape = true; } {
         enabled = true;
         value = {
           type = "standard";

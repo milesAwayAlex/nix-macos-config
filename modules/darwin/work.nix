@@ -73,6 +73,11 @@ in
       "1password-cli"
     ];
 
+  # `pkgs.carman`: the memory client ../home/work.nix wires into Claude Code
+  # (D33). Set here for the reason the predicate is — with `useGlobalPkgs`
+  # a home module has no `nixpkgs.*` to add an overlay to.
+  nixpkgs.overlays = [ self.inputs.carman.overlays.default ];
+
   # The endpoint scanner re-signs TLS to the package hosts — Go's proxy,
   # GitHub, npm, crates.io, PyPI — under a root of its own. Its nix rule puts
   # `ssl-cert-file` in nix.conf, which covers nix's own downloads; a
