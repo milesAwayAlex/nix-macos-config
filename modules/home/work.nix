@@ -2,7 +2,6 @@
 # employer's platform choices, split out so a consumer of these modules can
 # take everything else without them (D17).
 {
-  config,
   lib,
   pkgs,
   ...
@@ -19,8 +18,8 @@ let
   # Where the Mac reaches carman's memory service: a LoadBalancer on the dev
   # VM's cluster, which lima forwards to loopback (DEVVM.md, Ports).
   cmemUrl = "http://127.0.0.1:8377";
-  # The laptop role's token, for sessions and for the shell alike.
-  cmemToken = "op://Private/carman cmem/laptop";
+  # The laptop role's token, as its login-keychain item (D35).
+  cmemTokenItem = "cmem-laptop-token";
   # The memory's hooks for Claude Code, as a file for `claude --settings`:
   # they call cmem by its store path and carry no secret. Claude Code's own
   # memory is switched off in the same file, so a session has one memory;
@@ -30,23 +29,40 @@ let
     disableAutoMemory = true;
   };
 
-  gh = lib.getExe config.programs.gh.package;
-  # What a Claude Code session's git is started with (D34): GitHub's ssh
-  # remotes rewritten to HTTPS, as the environment variables git reads
-  # configuration from. Over HTTPS git asks the login `gh` already holds —
-  # `programs.gh` makes gh the credential helper for github.com — so an
-  # agent's fetch or push never waits on the ssh key's biometric prompt.
-  githubSshPrefixes = [
-    "git@github.com:"
-    "ssh://git@github.com/"
-  ];
-  agentGitEnv = lib.concatStringsSep " " (
-    [ "GIT_CONFIG_COUNT=${toString (builtins.length githubSshPrefixes)}" ]
-    ++ lib.imap0 (
-      i: prefix:
-      "GIT_CONFIG_KEY_${toString i}=url.https://github.com/.insteadOf GIT_CONFIG_VALUE_${toString i}=${lib.escapeShellArg prefix}"
-    ) githubSshPrefixes
-  );
+  # Keychain copies of 1Password items, service name to reference (D35):
+  # tokens that sessions and unattended runs read without a prompt.
+  keychainCopies = {
+    # Inference only (`claude setup-token`), for test runs. Not for sessions.
+    claude-test-token = "op://Private/Sparelabs Claude API Key/credential";
+    ${cmemTokenItem} = "op://Private/carman cmem/laptop";
+  };
+  readKeychain =
+    service: ''/usr/bin/security find-generic-password -s ${service} -a "$USER" -w 2>/dev/null'';
+  # Refreshes the copies from 1Password; run by hand, one approval.
+  keychainSync = pkgs.writeShellApplication {
+    name = "keychain-sync";
+    runtimeInputs = [ pkgs._1password-cli ];
+    text = ''
+      copy() {
+        local value
+        value=$(op read "$2") || return
+        case $value in
+          *[\"\\]* | *$'\n'*) echo "keychain: $1 has a character this cannot quote" >&2; return 1 ;;
+        esac
+        # On standard input, so the value is on no command line.
+        printf 'add-generic-password -U -s %s -a %s -w "%s"\n' "$1" "$USER" "$value" |
+          /usr/bin/security -i
+        echo "keychain: $1 updated"
+      }
+      status=0
+      ${lib.concatStrings (
+        lib.mapAttrsToList (service: ref: ''
+          copy ${lib.escapeShellArg service} ${lib.escapeShellArg ref} || status=1
+        '') keychainCopies
+      )}
+      exit "$status"
+    '';
+  };
 in
 {
   home.packages = with pkgs; [
@@ -60,6 +76,7 @@ in
     # modules/darwin/work.nix. On PATH because an agent runs `cmem note` and
     # `cmem recall` by name; the hooks do not need it there.
     carman.cmem
+    keychainSync
   ];
 
   # 1Password is this machine's ssh agent. Two things about the line itself:
@@ -79,40 +96,31 @@ in
 
   programs.bash.shellAliases.spacectl = "op run --env-file=${spaceliftEnv} -- ${pkgs.spacectl}/bin/spacectl";
 
-  # A function around `op read`, so claude itself is the foreground process
-  # and tmux names the window after it (D20). The token is never exported; it
-  # reaches claude's environment only. `command` because the native installer
-  # owns the binary (D13); mkBefore keeps the ~/.bashrc.local hook last.
+  # `claude` is a function so that claude stays the foreground process and
+  # tmux names the window after it. `env` because the native installer owns
+  # the binary (D13); mkBefore keeps the ~/.bashrc.local hook last.
   #
-  # The same function gives every session carman's memory (D33): the hooks
-  # ride in on `--settings`, which adds to ~/.claude/settings.json and leaves
-  # the file the harness's own (D13), and the memory's token arrives the way
-  # claude's does. That read has no `|| return` — a session without its
-  # memory is still a session, and the hook says at the start that it could
-  # not reach the service.
+  # It gives a session carman's memory (D33): hooks through `--settings`,
+  # the token from the keychain (D35). No token, and the hook says so.
   #
-  # And it is where a session's git is pointed at gh's login (D34) — the
-  # session's alone, through `env`, which is replaced by claude and so keeps
-  # it the foreground process; a shell's own git still uses the ssh key.
-  # Only when gh is logged in: without a login the session keeps ssh.
+  # git and gh are told not to prompt: nobody is at a session's terminal.
   #
-  # `cmem` typed at a prompt reads the token for that one command. A value
-  # already in the environment wins, which is how a trial service is aimed at.
+  # `cmem` at a prompt reads the same token. One already in the environment
+  # wins, which is how a trial service is aimed at.
   programs.bash.initExtra = lib.mkBefore ''
     claude() {
-      local token cmem_token
-      local -a git_env=()
-      token=$(op read 'op://Private/Sparelabs Claude API Key/credential') || return
-      cmem_token=$(op read '${cmemToken}')
-      if ${gh} auth token --hostname github.com >/dev/null 2>&1; then
-        git_env=(${agentGitEnv})
-      fi
-      CLAUDE_CODE_OAUTH_TOKEN=$token CMEM_TOKEN=$cmem_token env "''${git_env[@]}" claude --settings ${cmemSettings} "$@"
+      local cmem_token
+      cmem_token=$(${readKeychain cmemTokenItem})
+      CMEM_TOKEN=$cmem_token env GIT_TERMINAL_PROMPT=0 GH_PROMPT_DISABLED=1 \
+        claude --settings ${cmemSettings} "$@"
     }
 
     cmem() {
       local token=$CMEM_TOKEN
-      [ -n "$token" ] || token=$(op read '${cmemToken}') || return
+      if [ -z "$token" ] && ! token=$(${readKeychain cmemTokenItem}); then
+        echo "cmem: no token in the keychain; run keychain-sync" >&2
+        return 1
+      fi
       CMEM_URL=''${CMEM_URL:-${cmemUrl}} CMEM_TOKEN=$token command cmem "$@"
     }
   '';

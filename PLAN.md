@@ -356,7 +356,7 @@ complete on 2026-08-21; the header waited on the gate.
       a PR once it has run a while.
       **gcloud** in `modules/home/gcloud.nix` with
       `withExtraComponents [gke-gcloud-auth-plugin]`. **gh** carries a config
-      module (`git_protocol = ssh`). `bun` and `go` skipped — no toolchain
+      module (`git_protocol`; since D34, GitHub's git as well). `bun` and `go` skipped — no toolchain
       need yet; per-project versions go through dev shells when one appears.
 - [x] **GNU userland**: `coreutils`, `findutils`, `gnused`, `gnugrep`, `gawk`,
       `gnutar`, `diffutils` and `gnumake` unprefixed in `modules/home/gnu.nix`

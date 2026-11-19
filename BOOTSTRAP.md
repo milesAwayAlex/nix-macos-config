@@ -254,15 +254,24 @@ protect a stable artifact. Revisit if it settles.
 
 On the work hosts `claude` is a shell function that also gives each session
 carman's memory (D33). It needs two things this repo does not make: the
-`carman cmem` item in 1Password, which comes with the account, and the service
-itself on this Mac's dev VM — `scripts/deploy.sh devvm` in the carman repo,
-once the VM is up. Until then a session says at its start that memory could
-not be reached, and works as before.
+memory's token in this Mac's login keychain, and the service itself on this
+Mac's dev VM — `scripts/deploy.sh devvm` in the carman repo, once the VM is
+up. Until then a session says at its start that memory could not be reached,
+and works as before.
 
-The same function points a session's git at `gh`'s login for GitHub, so an
-agent's fetch or push does not wait on the ssh key's Touch ID (D34). That
-needs `gh auth login` to have been done on this Mac — without it sessions stay
-on ssh — and `gh auth refresh -s workflow` if agents are to push changes under
+The token is a copy. Its record is the `carman cmem` item in 1Password, which
+comes with the account, and `keychain-sync` copies it — and the Claude token
+that test runs use — into the keychain with one approval (D35). Run it once
+on a new Mac and again after either token is rotated.
+
+Git reaches GitHub with `gh`'s login on every host, over HTTPS whatever form
+the remote is written in, so neither a shell's nor an agent's fetch or push
+waits on the ssh key's approval (D34). That needs `gh auth login` on each Mac
+— until then only public repositories can be fetched, and nothing pushed —
+answering HTTPS when it asks for the git protocol: gh keeps that answer per
+host in `hosts.yml`, where it overrides the declared default
+(`gh config set git_protocol https -h github.com` corrects it). And
+`gh auth refresh -s workflow` if agents are to push changes under
 `.github/workflows`.
 
 ## Slack

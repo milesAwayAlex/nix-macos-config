@@ -599,6 +599,16 @@ cert exports — stay in `~/.bashrc.local` (D10). Deploy-time secrets for a
 server or VM are sops-nix's job once one exists. `op run` is for interactive,
 per-command use by a human at an unlocked vault.
 
+*2026-11-19:* `claude` no longer takes a token this way. The premise above
+was wrong: Claude Code does not hand `CLAUDE_CODE_OAUTH_TOKEN` to the commands
+it runs (measured — the variable is in the claude process and absent from a
+tool's shell), so the token only chose the login, and the login it chose is
+inference-only: a session under it has none of the claude.ai connectors.
+Sessions now use the native login in the keychain. The token stays for test
+runs, which is what it was issued for, and a session's remaining credential
+reaches it another way (D35). `spacectl` is unchanged and is still the shape
+for a credential worth an approval.
+
 **Revisit when.** A tool wants a credential file rather than environment
 variables, which is `op inject` against a template; or a non-interactive
 context needs the values, which means a service account rather than the
@@ -1348,22 +1358,29 @@ where the unfree predicate is and for the same reason (D18).
 - The VM is not started at login (PLAN.md backlog). A session opened before
   `limactl start devvm` has no memory for its whole life.
 
+*2026-11-19, later:* the memory's token is read from the login keychain,
+not from 1Password at launch (D35), so starting a session asks for nothing.
+"Why the function" above still holds except for where the value comes from.
+The copy that can drift is now the keychain's as well as 1Password's:
+after the cluster's Secret is remade, carman rewrites the item and
+`keychain-sync` brings the Mac along.
+
 **Revisit when.** The harness grows a declared-settings file of its own
 (D13's condition, and then the hooks go there); the service moves off the
 laptop's VM, which changes the URL and probably the token's home; or a second
 harness wants the same memory, which is the point to split the module out.
 
-## D34 — An agent's git reaches GitHub with gh's login, not the ssh key *(2026-11-19)*
+## D34 — Git reaches GitHub with gh's login, not the ssh key *(2026-11-19)*
 
-**Decision.** A Claude Code session on the work hosts is started with git
-configuration in its environment that rewrites GitHub's ssh remotes to HTTPS
-(`GIT_CONFIG_COUNT` and its keys, set by the `claude` function in
-`modules/home/work.nix`). Over HTTPS git asks the credential helper, which
-`programs.gh` already makes `gh auth git-credential` for github.com, so the
-session fetches and pushes with the token `gh` keeps in the keychain and no
-prompt. Remotes are not edited, a shell's own git still uses the ssh key in
-1Password (D19), and the settings are applied only when gh has a login — a
-laptop without one keeps ssh in its sessions too.
+**Decision.** On every host git dials GitHub over HTTPS, whatever form a
+remote is written in: `url."https://github.com/".insteadOf` for both ssh
+forms, in `modules/home/gh.nix`. Over HTTPS git asks the credential helper,
+which `programs.gh` in the same file makes `gh auth git-credential` for
+github.com, so a fetch or a push uses the token `gh` keeps in the keychain
+and nothing prompts — in a shell, in an agent's session, in whatever either
+starts. Remotes are not edited; gh writes HTTPS ones into new clones
+(`git_protocol`). The ssh key in the password manager (D19) is no longer
+what GitHub's git uses, and is still what every other host gets.
 
 **Why.** Every ssh use of the key is approved in 1Password, and an approval
 lasts until 1Password locks. With several sessions open, each lock cost each
@@ -1375,38 +1392,124 @@ no prompt. Moving git's transport onto that same credential adds almost
 nothing to what a session holds, and removes the one step that needed a
 person.
 
-**Why the session's environment.** It is the narrowest place that works: the
-agent's git and nothing else. In `programs.git` the rewrite would take the
-ssh key out of every shell as well, and with it the only use of D19 a person
-makes daily. In the environment it also reaches whatever the session runs
-that shells out to git — `gh`, nix's git fetcher — with nothing to remember.
+**Why everywhere, and not the session alone.** It began, the same day, as
+git settings in a Claude Code session's environment (`GIT_CONFIG_COUNT`, set
+by the `claude` function): the narrowest place that worked, and it kept the
+key in a person's own shell. That left every session not started through the
+function — a script, another harness — on ssh and waiting, and one machine
+with two ways to reach GitHub. The approval a person gave at each lock was
+guarding nothing the token beside it did not already allow, so the shell
+gave it up too and the function carries no git settings.
+
+**Why a rewrite, and not HTTPS remotes alone.** ssh-form URLs keep arriving
+from outside a clone's config — a pasted command, a README, a dependency, a
+submodule — and each would fall back to the key and its prompt. Two lines
+make the form of a URL not matter. With them, converting the existing
+remotes is cosmetic, and was not done.
 
 **Why not the alternatives.**
 - *Longer approvals* — 1Password's "remember" setting raised to hours, plus a
   long `ControlPersist` — make prompts rarer, not absent: a lock, a sleep or a
   tunnel flap still stops an unattended agent. The setting is made by hand in
   the app and covers every key the agent holds.
-- *A key on disk for agents* reverses D19 and is as broad as the account.
+- *An ssh key that does not prompt* — this one copied out of the password
+  manager, or a second — is another standing credential as broad as the
+  account, beside a token pull requests need regardless. It reverses D19,
+  takes steps by hand on each Mac, and would serve only what speaks ssh to
+  GitHub without git: a search of the local clones found no such build or
+  dependency *(2026-11-19)*.
 - *A fine-grained token* scoped to chosen repositories is the tighter version
-  of this decision, not a different one: read from 1Password at launch like
-  the session's other credentials. It needs the organisation to approve it
-  and narrows the session's `gh` with it. Not yet.
+  of this decision, not a different one, kept the way D35 keeps tokens. It
+  needs the organisation to approve it and narrows `gh` with it. Not yet.
 
 **Known, and left alone.**
 - This removes the last per-session human step before a push. What stands
   between an agent and a branch is now GitHub's branch protection alone.
-- gh's token has no `workflow` scope, so a push that touches
-  `.github/workflows` is refused over HTTPS where the ssh key would have been
-  let through. `gh auth refresh -s workflow` adds it, by hand.
+- A Mac where gh has no login can fetch public repositories from GitHub and
+  nothing else, until `gh auth login` (BOOTSTRAP.md). The bootstrap clone is
+  public and HTTPS, so a new machine is not stuck.
+- A remote still reads `git@github.com:…` while git's errors name
+  `https://github.com/…`.
+- gh's token needs the `workflow` scope before a push that touches
+  `.github/workflows` is accepted over HTTPS; the ssh key was never asked.
+  `gh auth refresh -s workflow` adds it, by hand — done on `work`
+  *(2026-11-19)*, so a session there can change CI on a branch it pushes.
 - Measured: with ssh made to fail, `ls-remote` and `push --dry-run` succeed
-  against this repo and a private employer one, by their ssh-form URLs, and a
-  session started through the function sees the settings in its shell. The
-  remote-URL include that turns this repo's hooks on (D9) still matches —
-  `insteadOf` changes what git dials, not what the config says.
+  against this repo and a private employer one, by their ssh-form URLs. The
+  remote-URL include that turns this repo's hooks on (D9) matches the URL as
+  the clone's config writes it — `insteadOf` changes what git dials, not
+  what the config says — so it lists both forms.
 - Only github.com. A remote anywhere else still uses the key and still
   prompts.
+- The `claude` function sets `GIT_TERMINAL_PROMPT=0` and `GH_PROMPT_DISABLED=1`.
+  Measured, a session's tools have no terminal, so neither git nor gh could
+  wait on one before: the variables change the error an agent reads
+  ("terminal prompts disabled" for "Device not configured") and hold if a
+  tool is ever given a terminal.
 
 **Revisit when.** The employer requires the hardware-backed key for pushes;
 the fine-grained token becomes worth its approval; or 1Password grows an
 approval that outlives a lock for one named key, which would put the agent
 back on ssh.
+
+## D35 — Tokens for unattended use: 1Password is the record, the login keychain the working copy *(2026-11-19)*
+
+**Decision.** A token that a session or an unattended run needs with nobody
+to approve it has two homes. 1Password holds the record. The login keychain
+holds a copy, as a generic-password item named in `keychainCopies`
+(`modules/home/work.nix`), and readers take it from there with
+`security find-generic-password -s <name> -w`. `keychain-sync` refreshes
+every copy from its `op://` reference — run by hand, one approval, after a
+rotation or on a new Mac. Two items today: `cmem-laptop-token`, which the
+`claude` and `cmem` functions read, and `claude-test-token`, the
+inference-only Claude token that test runs hand to their containers.
+
+**Why.** Approval per use had become a tax on work that could not pay it:
+six prompts in ninety minutes of benchmark runs, one run lost to a timeout,
+nothing possible overnight, and a prompt at every session start. And for
+these tokens it was guarding little. Measured on `work`: the claude.ai login
+itself is a keychain item any process can read silently, and the memory's
+tokens are in a cluster Secret the kubeconfig on disk can read. A token no
+stronger than what already sits beside it gains nothing from a gate of its
+own.
+
+**What may go in the keychain.** Only a token that is narrow, revocable and
+acceptable in the hands of any process running as the user — because that
+is who can read it. An item written by `security` lists `security` as its
+trusted reader, and anything can run `security`; there is no per-caller
+control to lean on. What reaches data or changes infrastructure stays
+behind an approval: the ssh key (D19), Spacelift (D20), the vault at large.
+
+**Why the keychain and not a file or the cluster.** It is where the tokens
+of this class already are — the harness's login, gh's. It is encrypted
+under the login password, unlocked from login to logout (`no-timeout` here,
+so through screen lock and sleep), and outside every checkout an agent's
+file tools walk. A cluster Secret would put the token in the guest at rest,
+which D23 keeps credentials out of; a run still hands it to a container for
+its lifetime, as before.
+
+**Why per machine.** The keychain is local to one Mac, and that is the
+point for the memory's token: when the memory moves from this Mac's cluster
+to a shared service, each machine's pointer to it is its own local secret.
+The URL is still declared (`cmemUrl`); it joins the token when it stops
+being loopback.
+
+**Shape.** The value is written through `security -i` on standard input, so
+it is never on a command line. A missing item is not an error at session
+start: the session runs and the memory's hook says it has no token.
+
+**Known, and left alone.**
+- Nothing reads the keychain before the first login after a reboot, and a
+  system daemon or a plain ssh login never does. A job in the user's own
+  session does.
+- A login password reset without the old password leaves a new, empty
+  keychain. `keychain-sync` is the recovery.
+- No history and no audit on the copy; rotation is 1Password first, then
+  `keychain-sync`.
+- Not measured: how long a `claude setup-token` token lives, or how one is
+  revoked short of the account.
+
+**Revisit when.** A token of a different class is proposed for the list —
+that is a new decision, not a new line; a run needs a token inside the
+cluster at rest (the in-cluster design with carman); or 1Password offers an
+approval that survives a lock for named items, which would let the copy go.

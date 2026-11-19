@@ -10,15 +10,20 @@
     # 2025-07-24): keeps per-machine permission files out of every repo.
     ignores = [ "**/.claude/settings.local.json" ];
 
-    includes = [
-      {
-        # Recognize this repo by remote URL (git 2.36+): robust to clone
-        # path/name, shared by linked worktrees, portable across machines.
-        # Retires D7's manual per-clone `git config core.hooksPath`.
-        condition = "hasconfig:remote.*.url:git@github.com:milesAwayAlex/nix-macos-config.git";
-        contents.core.hooksPath = ".githooks";
-      }
-    ];
+    # Recognize this repo by remote URL (git 2.36+): robust to clone
+    # path/name, shared by linked worktrees, portable across machines.
+    # Retires D7's manual per-clone `git config core.hooksPath`. Both forms
+    # of the URL, as written in the clone: gh writes HTTPS ones (D34).
+    includes =
+      map
+        (url: {
+          condition = "hasconfig:remote.*.url:${url}";
+          contents.core.hooksPath = ".githooks";
+        })
+        [
+          "git@github.com:milesAwayAlex/nix-macos-config.git"
+          "https://github.com/milesAwayAlex/nix-macos-config*"
+        ];
 
     settings = {
       user = {
