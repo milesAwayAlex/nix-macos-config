@@ -23,10 +23,11 @@ let
   cmemToken = "op://Private/carman cmem/laptop";
   # The memory's hooks for Claude Code, as a file for `claude --settings`:
   # they call cmem by its store path and carry no secret. Claude Code's own
-  # memory stays on beside it until `disableAutoMemory = true`.
+  # memory is switched off in the same file, so a session has one memory;
+  # its files stay under ~/.claude/projects and come back with `false`.
   cmemSettings = pkgs.carman.cmem-claude-code-settings.override {
     url = cmemUrl;
-    disableAutoMemory = false;
+    disableAutoMemory = true;
   };
 
   gh = lib.getExe config.programs.gh.package;

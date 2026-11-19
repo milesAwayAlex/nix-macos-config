@@ -1334,8 +1334,15 @@ where the unfree predicate is and for the same reason (D18).
   makes new tokens, and the item has to be written again from carman's side.
 - A second work laptop has the item (it is the account's) but its own VM has
   no service until carman is deployed there; sessions say so and carry on.
-- Claude Code's built-in memory stays on beside this one until its contents
-  are imported: `disableAutoMemory` in `modules/home/work.nix` is the switch.
+- Claude Code's built-in memory is off in these sessions *(2026-11-19,
+  later the same day, once its contents were imported)*: `disableAutoMemory`
+  in `modules/home/work.nix` puts `autoMemoryEnabled: false` in the settings
+  file. Measured on 2.1.311 in a repository with built-in memories — the key
+  takes effect through `--settings`: the memory section and the `MEMORY.md`
+  index are gone from the session, the cmem index is there. Nothing is
+  deleted; the files stay under `~/.claude/projects` and `false` brings them
+  back. A `claude` started any other way than the function has built-in
+  memory and no cmem.
 - `cmem` typed at a prompt reads the token even for commands that need none
   (`cmem scope`); `command cmem` is the binary.
 - The VM is not started at login (PLAN.md backlog). A session opened before
