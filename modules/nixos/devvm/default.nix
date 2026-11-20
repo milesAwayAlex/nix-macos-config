@@ -186,6 +186,10 @@ in
       systemd.services.lima-init.restartIfChanged = lib.mkForce false;
       systemd.services.lima-guestagent.restartIfChanged = false;
 
+      # One clock: lima's guest agent steps the guest to the Mac's every 10 s,
+      # so an NTP client here fights it whenever the Mac is off NTP (D36).
+      services.timesyncd.enable = false;
+
       # The host mount is lima-init's, from the seed's user-data, and cannot be
       # declared in `fileSystems`: the virtiofs tag is lima's sha256 over
       # location, a NUL byte and mount point, and a Nix string cannot hold the

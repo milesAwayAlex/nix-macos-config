@@ -41,6 +41,11 @@ let
   # is lima's own spelling of the same directory.
   kubeconfig = "$HOME/.lima/${name}/copied-from-guest/kubeconfig.yaml";
 
+  # launchd's name for the job that keeps the VM, and where both jobs put
+  # what they print themselves: a directory that is always there.
+  agentLabel = config.launchd.user.agents.devvm.serviceConfig.Label;
+  agentLog = "${config.users.users.${config.system.primaryUser}.home}/Library/Logs/devvm.log";
+
   limaYaml = (pkgs.formats.yaml { }).generate "lima-${name}.yaml" (
     {
       # Apple Virtualization rather than qemu: virtiofs instead of 9p, and no
@@ -222,13 +227,318 @@ let
       ${lib.optionalString (cfg.mount != null) ''
         case "$PWD" in ${cfg.mount} | ${cfg.mount}/*) workdir="$PWD" ;; esac
       ''}
-      exec ${pkgs.lima}/bin/limactl shell --preserve-env --workdir "$workdir" ${name} ${target} "$@"
+      exec ${cfg.package}/bin/limactl shell --preserve-env --workdir "$workdir" ${name} ${target} "$@"
     '';
+
+  # What launchd runs to keep the VM (D36): the host agent in the foreground,
+  # so the VM lives exactly as long as the job. `limactl start` becomes the
+  # agent, which shuts the guest down when launchd asks it to stop.
+  devvm-run = pkgs.writeShellApplication {
+    name = "devvm-run";
+    runtimeInputs = [ cfg.package ];
+    text = ''
+      # Nothing to keep without an instance, and `limactl start` would make
+      # one from lima's default template. One started by hand is left alone.
+      # Both are clean exits, which launchd does not answer.
+      status=$(limactl list ${name} --format '{{.Status}}' 2>/dev/null || true)
+      if [ -z "$status" ] || [ "$status" = Running ]; then
+        exit 0
+      fi
+      ${lib.optionalString cfg.keepAwake ''
+        # No system sleep on AC power while this process lives, which after
+        # the exec below is the host agent (D37). On battery it holds nothing.
+        /usr/bin/caffeinate -s -w $$ &
+      ''}
+      # The files lima itself writes when it starts the agent detached, so
+      # the logs are where DEVVM.md says, whoever started the VM.
+      exec limactl start --foreground --tty=false ${name} \
+        >"$HOME/.lima/${name}/ha.stdout.log" 2>"$HOME/.lima/${name}/ha.stderr.log"
+    '';
+  };
+
+  # Every check the layers above the instance have a known answer for: what is
+  # wrong, and the cure DEVVM.md gives. It changes nothing (D36). `--notify`
+  # is launchd's run: silent, and a notification when the verdict has changed
+  # and held for two runs, so a boot or a wake is not reported as a fault.
+  devvm-doctor = pkgs.writeShellApplication {
+    name = "devvm-doctor";
+    runtimeInputs = [
+      cfg.package
+      pkgs.coreutils
+      pkgs.gnused
+      pkgs.gawk
+      pkgs.jq
+    ]
+    ++ lib.optional roles.cluster.enable pkgs.kubectl;
+    text = ''
+      name=${name}
+      notify=
+      case "''${1:-}" in
+        --notify) notify=1 ;;
+        "") ;;
+        *)
+          echo "usage: devvm-doctor [--notify]" >&2
+          exit 64
+          ;;
+      esac
+
+      # A fault is an id, what is wrong and what to do, tab-separated. A note
+      # is something worth saying that is not this tool's to call a fault.
+      faults=()
+      notes=()
+      fault() { faults+=("$1"$'\t'"$2"$'\t'"$3"); }
+
+      # Whether a connection to a local port is taken and hung up at once:
+      # what a forward does with nothing behind it. A subshell, for the
+      # descriptor; the same test runs in the guest, below.
+      hangs_up() (
+        exec 3<>"/dev/tcp/127.0.0.1/$1" || exit 2
+        rc=0
+        read -r -t 0.3 -n 1 -u 3 _ || rc=$?
+        [ "$rc" -ne 0 ] && [ "$rc" -le 128 ]
+      ) 2>/dev/null
+
+      examine() {
+        local status facts now skew failed used disk job port alive
+        local -a dead=()
+        status=$(limactl list "$name" --format '{{.Status}}' 2>/dev/null || true)
+        if [ -z "$status" ]; then
+          fault instance "the instance does not exist" "just devvm-up (DEVVM.md, Bootstrap)"
+          return
+        fi
+        if [ "$status" != Running ]; then
+          fault instance "the instance is $status" "just devvm-up"
+          return
+        fi
+
+        if job=$(launchctl print "gui/$(id -u)/${agentLabel}" 2>/dev/null) &&
+          [ "$(sed -n 's/^[[:space:]]*pid = //p' <<<"$job" | head -n 1)" != "$(cat "$HOME/.lima/$name/ha.pid" 2>/dev/null)" ]; then
+          notes+=("started by hand, so launchd is not keeping it: just devvm-down, then just devvm-up")
+        ${lib.optionalString cfg.keepAwake ''
+          # launchd's VM, and nothing holding the Mac awake for it: a host
+          # agent from before keepAwake, or a caffeinate that died.
+          elif [ -n "$job" ] && ! /usr/bin/pgrep -qf "caffeinate -s -w $(cat "$HOME/.lima/$name/ha.pid")\$"; then
+            fault awake "nothing keeps the Mac awake for the VM on AC power" "just devvm-down, then just devvm-up"
+        ''}
+        fi
+
+        # One round trip for everything the guest has to say about itself.
+        # Single quotes on purpose: this expands in the guest, not here.
+        # shellcheck disable=SC2016
+        if ! facts=$(timeout 20 limactl shell --workdir / "$name" sudo sh -c '
+            echo "now=$(date +%s)"
+            echo "failed=$(systemctl list-units --failed --no-legend --plain | cut -d" " -f1 | tr "\n" " ")"
+            echo "root_used=$(df --output=pcent / | tail -n 1 | tr -dc 0-9)"
+            ${lib.optionalString (roles.stateDisk != null) ''
+              mountpoint -q ${roles.stateDir} && echo "state=mounted"
+              echo "state_used=$(df --output=pcent ${roles.stateDir} | tail -n 1 | tr -dc 0-9)"
+            ''}
+            ${lib.optionalString (cfg.mount != null) ''
+              mountpoint -q ${cfg.mount} && echo "share=mounted"
+            ''}
+            ${lib.optionalString roles.cluster.enable ''
+              k3s kubectl get --raw /readyz >/dev/null 2>&1 && echo "api=ready"
+              pgrep -x kubectl >/dev/null && echo "watch=running"
+            ''}
+            exit 0
+          ' 2>/dev/null); then
+          fault guest "the guest does not answer over ssh" "limactl restart $name"
+          return
+        fi
+        fact() { sed -n "s/^$1=//p" <<<"$facts"; }
+
+        now=$(fact now)
+        if [ -z "$now" ]; then
+          fault guest "the guest answered with nothing" "limactl restart $name"
+          return
+        fi
+        skew=$((now - $(date +%s)))
+        if [ "''${skew#-}" -gt 5 ]; then
+          fault clock "the guest's clock is ''${skew}s from the Mac's" \
+            "just devvm-shell sudo systemctl restart lima-guestagent"
+        fi
+
+        # Every port the host agent listens on is a forward. One that hangs
+        # up here and not in the guest has lost the connection it was made
+        # with: a guest agent restart can leave that on some ports and not
+        # on others, and ssh, on a forward of its own, never shows it.
+        for port in $(/usr/sbin/lsof -nP -a -p "$(cat "$HOME/.lima/$name/ha.pid")" -iTCP -sTCP:LISTEN -Fn 2>/dev/null |
+          sed -n 's/^n.*:\([0-9]*\)$/\1/p' | sort -un); do
+          if hangs_up "$port"; then
+            dead+=("$port")
+          fi
+        done
+        if [ ''${#dead[@]} -gt 0 ]; then
+          # shellcheck disable=SC2016
+          alive=$(timeout 20 limactl shell --workdir / "$name" bash -c '
+            for port in "$@"; do
+              (
+                exec 3<>"/dev/tcp/127.0.0.1/$port" || exit 1
+                rc=0
+                read -r -t 0.3 -n 1 -u 3 _ || rc=$?
+                [ "$rc" -eq 0 ] || [ "$rc" -gt 128 ]
+              ) 2>/dev/null && printf "%s " "$port"
+            done
+            exit 0
+          ' _ "''${dead[@]}" 2>/dev/null || true)
+          if [ -n "$alive" ]; then
+            fault forwards "lima's port forwards are stale: ''${alive% } answer in the guest and not on the Mac" \
+              "limactl restart $name (DEVVM.md, When it breaks)"
+          fi
+        fi
+
+        failed=$(fact failed)
+        if [ -n "''${failed// /}" ]; then
+          fault units "failed units in the guest: $failed" "just devvm-shell systemctl status $failed"
+        fi
+
+        for disk in root state; do
+          used=$(fact "''${disk}_used")
+          if [ -n "$used" ] && [ "$used" -ge 90 ]; then
+            fault "disk-$disk" "the guest's $disk disk is $used% full" \
+              "DEVVM.md, When it breaks: the guest's disk fills"
+          fi
+        done
+        ${lib.optionalString (roles.stateDisk != null) ''
+          if [ "$(fact state)" != mounted ]; then
+            fault state "the state disk is not mounted in the guest" \
+              "just devvm-shell journalctl -u devvm-state-disk (DEVVM.md, When it breaks)"
+          fi
+        ''}
+        ${lib.optionalString (cfg.mount != null) ''
+          if [ "$(fact share)" != mounted ]; then
+            fault share "${cfg.mount} is not mounted in the guest" \
+              "just devvm-shell sudo systemctl restart lima-init"
+          fi
+        ''}
+        ${lib.optionalString roles.cluster.enable ''
+          local kubeconfig="${kubeconfig}" context=${guest.networking.hostName}
+          local nodes pods svcs bad svc port holder
+          k() { kubectl --kubeconfig "$kubeconfig" --request-timeout=5s "$@"; }
+
+          if [ "$(fact api)" != ready ]; then
+            fault k3s "k3s is not answering in the guest" \
+              "it restarts itself; just devvm-shell journalctl -u k3s -n 50 if it stays down"
+            return
+          fi
+          if [ ! -f "$kubeconfig" ]; then
+            fault kubeconfig "the kubeconfig has not been copied to the Mac" \
+              "limactl restart $name (DEVVM.md, When it breaks)"
+            return
+          fi
+          if ! k version >/dev/null 2>&1; then
+            fault api "the API answers in the guest and not on the Mac" \
+              "limactl restart $name (DEVVM.md, When it breaks)"
+            return
+          fi
+          if ! nodes=$(k get nodes -o json 2>/dev/null) ||
+            ! pods=$(k get pods -A -o json 2>/dev/null) ||
+            ! svcs=$(k get services -A -o json 2>/dev/null); then
+            fault api "the API stopped answering part-way through" "devvm-doctor again"
+            return
+          fi
+
+          # Ready has to be True and every other condition, the pressures, not.
+          bad=$(jq -r '.items[] | .metadata.name as $n | .status.conditions[]
+            | select((.type == "Ready") != (.status == "True"))
+            | "\($n) \(.type)=\(.status)"' <<<"$nodes" | tr '\n' ' ')
+          if [ -n "$bad" ]; then
+            fault node "node condition: $bad" "kubectl --context $context describe nodes"
+          fi
+
+          # Not running, or running with a container that is not ready.
+          pods=$(jq -r '.items[] | select(.status.phase != "Succeeded")
+            | select(.status.phase != "Running" or ([.status.containerStatuses[]?.ready] | all | not))
+            | "\(.metadata.namespace)/\(.metadata.name)"' <<<"$pods")
+          bad=$(awk -F/ '$1 == "kube-system"' <<<"$pods" | tr '\n' ' ')
+          if [ -n "$bad" ]; then
+            fault pods "system pods not running: $bad" "kubectl --context $context -n kube-system get pods"
+          fi
+          bad=$(awk -F/ 'NF && $1 != "kube-system"' <<<"$pods" | tr '\n' ' ')
+          if [ -n "$bad" ]; then
+            notes+=("pods not running outside kube-system: $bad")
+          fi
+
+          # A service the Mac should reach is a listener the host agent holds:
+          # a LoadBalancer under its own port, a NodePort under the node's.
+          while read -r svc port; do
+            [ -n "$port" ] || continue
+            if /usr/sbin/lsof -nP -a -p "$(cat "$HOME/.lima/$name/ha.pid")" -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
+              continue
+            fi
+            holder=$(/usr/sbin/lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | awk 'NR == 2 {print $1}')
+            if [ -n "$holder" ]; then
+              fault "port-$port" "service $svc: port $port on the Mac is held by $holder" \
+                "stop it, or move the service; lima forwards the port once it is free"
+            elif [ "$(fact watch)" != running ]; then
+              fault "port-$port" "service $svc: port $port is not forwarded, the guest agent has no kubectl watch" \
+                "just devvm-rebuild, limactl restart $name (DEVVM.md, When it breaks)"
+            else
+              fault "port-$port" "service $svc: port $port is not forwarded to the Mac" \
+                "look for $port in ~/.lima/$name/ha.stderr.log"
+            fi
+          done < <(jq -r '.items[] | . as $s
+            | select(.spec.type == "LoadBalancer" or .spec.type == "NodePort")
+            | .spec.ports[] | select((.protocol // "TCP") == "TCP")
+            | "\($s.metadata.namespace)/\($s.metadata.name) \(if $s.spec.type == "LoadBalancer" then .port else .nodePort end)"' <<<"$svcs")
+        ''}
+      }
+
+      report() {
+        local entry what cure
+        if [ ''${#faults[@]} -eq 0 ]; then
+          echo "$name: healthy"
+        else
+          echo "$name: ''${#faults[@]} fault(s)"
+        fi
+        for entry in "''${faults[@]}"; do
+          IFS=$'\t' read -r _ what cure <<<"$entry"
+          printf '  ✗ %s\n      %s\n' "$what" "$cure"
+        done
+        for entry in "''${notes[@]}"; do
+          printf '  · %s\n' "$entry"
+        done
+      }
+
+      examine
+      if [ -z "$notify" ]; then
+        report
+        [ ''${#faults[@]} -eq 0 ]
+        exit
+      fi
+
+      state="''${XDG_STATE_HOME:-$HOME/.local/state}/devvm"
+      mkdir -p "$state"
+      { date '+%F %T %z'; report; } >"$state/report"
+
+      # The verdict is the set of fault ids. `seen` is the last run's, `told`
+      # the last one a notification went out for.
+      verdict=$(for entry in "''${faults[@]}"; do echo "''${entry%%$'\t'*}"; done | sort | tr '\n' ' ')
+      seen=$(cat "$state/seen" 2>/dev/null || true)
+      told=$(cat "$state/told" 2>/dev/null || true)
+      printf '%s' "$verdict" >"$state/seen"
+      if [ "$verdict" = "$seen" ] && [ "$verdict" != "$told" ]; then
+        if [ ''${#faults[@]} -eq 0 ]; then
+          message="healthy again"
+        else
+          IFS=$'\t' read -r _ message _ <<<"''${faults[0]}"
+          if [ ''${#faults[@]} -gt 1 ]; then
+            message="$message, and $((''${#faults[@]} - 1)) more: devvm-doctor"
+          fi
+        fi
+        /usr/bin/osascript -e 'on run argv' \
+          -e 'display notification (item 1 of argv) with title "devvm"' \
+          -e 'end run' "$message" >/dev/null 2>&1 || true
+        printf '%s' "$verdict" >"$state/told"
+        cat "$state/report" >>"$state/doctor.log"
+      fi
+    '';
+  };
 
   devvm-status = pkgs.writeShellApplication {
     name = "devvm-status";
     runtimeInputs = [
-      pkgs.lima
+      cfg.package
       pkgs.kubectl
       pkgs.openssh
       pkgs.jq
@@ -338,7 +648,7 @@ let
   devvm-adopt = pkgs.writeShellApplication {
     name = "devvm-adopt";
     runtimeInputs = [
-      pkgs.lima
+      cfg.package
       pkgs.openssh
     ];
     text = ''
@@ -388,10 +698,13 @@ let
 
   # Idempotent: the disk and the instance are created only when absent. Names
   # and sizes come from the configuration, so the justfile restates none.
+  # The start is launchd's wherever its job is loaded (D36), so that a VM
+  # brought up by hand is kept like one brought up at login.
   devvm-up = pkgs.writeShellApplication {
     name = "devvm-up";
     runtimeInputs = [
-      pkgs.lima
+      cfg.package
+      pkgs.coreutils
       pkgs.gawk
       pkgs.gnugrep
     ];
@@ -404,13 +717,52 @@ let
       if ! limactl list -q | grep -qx ${name}; then
         limactl create --name ${name} --yes ${limaYaml}
       fi
-      limactl start ${name}
+      if [ "$(limactl list ${name} --format '{{.Status}}')" = Running ]; then
+        echo "${name} is running"
+        exit 0
+      fi
+
+      job="gui/$(id -u)/${agentLabel}"
+      if ! launchctl print "$job" >/dev/null 2>&1; then
+        exec limactl start ${name}
+      fi
+      # The host agent reports on its standard output, which the job sends
+      # to this file; emptied first, so the last run's "running" is not read.
+      events="$HOME/.lima/${name}/ha.stdout.log"
+      : >"$events"
+      launchctl kickstart "$job"
+      echo "starting ${name} under launchd; its log is ~/.lima/${name}/ha.stderr.log"
+      for _ in {1..300}; do
+        sleep 2
+        if grep -q '"degraded":true' "$events"; then
+          echo "${name} is DEGRADED (DEVVM.md, When it breaks)" >&2
+          exit 1
+        elif grep -q '"running":true' "$events"; then
+          echo "${name} is running"
+          exit 0
+        elif grep -q '"exiting":true' "$events"; then
+          break
+        fi
+      done
+      echo "${name} did not come up: ~/.lima/${name}/ha.stderr.log, and ${agentLog} for the job itself" >&2
+      exit 1
     '';
   };
 in
 {
   options.devvm = {
     enable = lib.mkEnableOption "the local Linux development VM";
+
+    # Every tool here and the host agent run this one lima; the guest agent
+    # is the one it ships, handed to the guest at each start.
+    package = lib.mkPackageOption pkgs "lima" { };
+
+    keepAwake = lib.mkEnableOption ''
+      keeping the Mac from system sleep while the VM runs and the Mac is on
+      AC power, for a guest that has work to do when nobody is at the
+      keyboard. The display still sleeps and locks, and on battery the Mac
+      sleeps as it always did
+    '';
 
     guest = lib.mkOption {
       type = lib.types.raw;
@@ -479,7 +831,11 @@ in
     stateDiskSize = lib.mkOption {
       type = lib.types.str;
       default = "40GiB";
-      description = "Size of the volume the guest's `devvm.stateDisk` names; `devvm-up` creates it.";
+      description = ''
+        Size of the volume the guest's `devvm.stateDisk` names. `devvm-up`
+        creates it at this size and never looks again; DEVVM.md has the
+        steps that grow an existing one.
+      '';
     };
     sshPort = lib.mkOption {
       type = lib.types.port;
@@ -505,7 +861,7 @@ in
     lib.mkMerge [
       {
         environment.systemPackages = [
-          pkgs.lima
+          cfg.package
           # Deploys a guest change from here: the Mac evaluates, the guest builds
           # and activates its own system over lima's ssh. The builder role is not
           # involved, so a guest without it deploys the same way.
@@ -523,7 +879,9 @@ in
             '';
           }))
           devvm-up
+          devvm-run
           devvm-status
+          devvm-doctor
         ]
         ++ lib.optional roles.builder.enable devvm-adopt
         ++ lib.optionals containers (
@@ -540,6 +898,42 @@ in
         # existing instance only by copying it over (DEVVM.md); the image and the
         # disk sizes are honoured at creation only.
         environment.etc."devvm/lima.yaml".source = limaYaml;
+
+        # The VM is up from login to logout, and comes back from a crash
+        # (D36). A user agent: ~/.lima and the host agent are per-user.
+        launchd.user.agents.devvm.serviceConfig = {
+          # By its profile path, not its store path: nix-darwin reloads an
+          # agent whose plist changed, and a reload here restarts the VM. A
+          # new lima reaches the VM at its next start, as it always has.
+          # The system profile and not /run/current-system, which is linked
+          # only after the agents are loaded: on the switch that first adds
+          # this job launchd finds no program there and never tries again.
+          ProgramArguments = [ "${config.system.profile}/sw/bin/devvm-run" ];
+          RunAtLoad = true;
+          # `limactl stop` ends the host agent cleanly, and stopped has to
+          # stay stopped; any other exit is a crash to come back from.
+          KeepAlive.SuccessfulExit = false;
+          ThrottleInterval = 30;
+          # Room for a loaded guest to shut down before launchd kills the
+          # job: 5 to 7 seconds measured, and launchd's own limit is 20.
+          ExitTimeOut = 90;
+          # Not Background, which confines a job to the efficiency cores.
+          ProcessType = "Standard";
+          StandardOutPath = agentLog;
+          StandardErrorPath = agentLog;
+        };
+
+        # The checks, every two minutes; it reports and repairs nothing.
+        launchd.user.agents.devvm-doctor.serviceConfig = {
+          ProgramArguments = [
+            (lib.getExe devvm-doctor)
+            "--notify"
+          ];
+          StartInterval = 120;
+          ProcessType = "Background";
+          StandardOutPath = agentLog;
+          StandardErrorPath = agentLog;
+        };
       }
 
       (lib.mkIf roles.cluster.enable {

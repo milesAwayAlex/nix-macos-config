@@ -62,7 +62,9 @@ Declarative macOS machine configuration: flake-based nix-darwin + home-manager (
   `devvm.guest` in its host file and declares sizing, the shared directory and
   its shims beside it; the darwin module reads everything else from the guest.
   **DEVVM.md is the operating manual** — bootstrap order, day-to-day recipes,
-  what each kind of change costs; read it before touching either half. Three
+  what each kind of change costs; read it before touching either half. launchd
+  keeps the VM up, and `devvm-doctor` says what is wrong with it and the cure,
+  changing nothing (D36): run it before diagnosing by hand. Three
   things bite: `users.mutableUsers = true` in the
   guest is **mandatory** (lima creates its user imperatively; a rebuild without
   it deletes that user and your `limactl shell` access),

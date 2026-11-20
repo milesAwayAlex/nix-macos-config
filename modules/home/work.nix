@@ -27,6 +27,9 @@ let
   cmemSettings = pkgs.carman.cmem-claude-code-settings.override {
     url = cmemUrl;
     disableAutoMemory = true;
+    # Added to what a session is told when it starts without memory. The
+    # service is on the dev VM, so the VM's own check is the place to look.
+    unreachableHint = "Run `devvm-doctor` to see what is wrong with the dev VM that serves it, and the cure.";
   };
 
   # Keychain copies of 1Password items, service name to reference (D35):

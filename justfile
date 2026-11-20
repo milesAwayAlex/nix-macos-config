@@ -89,6 +89,11 @@ devvm-down:
 devvm-status:
     devvm-status
 
+# what is wrong with the VM and the cure for it; changes nothing. launchd runs
+# the same checks every two minutes and notifies (DEVVM.md, "Day to day")
+devvm-doctor:
+    devvm-doctor
+
 # push the host's public key in and pin the guest's host key. Once per state
 # disk, after the first rebuild has put that disk in place. Idempotent, and the
 # one step that cannot be declarative: neither key exists at build time. Runs

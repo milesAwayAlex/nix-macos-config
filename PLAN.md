@@ -911,6 +911,8 @@ settled 2026-09-20 — the D25 addendum.
   graceful guest shutdown takes longer than that with k3s up — which makes
   this entry, once built, also the fix for the VM dying uncleanly at every
   Mac restart today.
+  Built *(2026-11-19)*: D36, with a health check beside it. Measured then,
+  the shutdown takes 5 to 7 s, inside launchd's default after all.
 - Registry-only service account for image pulls *(2026-09-05)*: the token the
   dev VM receives for `gcr.io` is the engineer's own, scoped `cloud-platform`.
   gcloud honours `auth/impersonate_service_account` everywhere, `config-helper`

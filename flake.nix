@@ -27,7 +27,14 @@
       # Only the module is used and it takes `pkgs` from us, so following keeps
       # a second nixpkgs out of the lock rather than changing what is built.
       inputs.nixpkgs.follows = "nixpkgs";
+      inputs.nixpkgs-unstable.follows = "nixpkgs-unstable";
     };
+
+    # For one package, lima, ahead of the release train: 26.05 carries 2.1.3
+    # and the stale port forwards it leaves are fixed in 2.3.0 (D36). The
+    # lock already held this nixpkgs as nixos-lima's own, which now follows
+    # it. Goes when the train's lima is 2.3.0 or later.
+    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
 
     # yegappan/lsp, deliberately out-of-nixpkgs (D11). Pinned by flake.lock,
     # independent of the release train; bump via `just update vim9-lsp`.
@@ -99,6 +106,8 @@
                 home-manager.extraSpecialArgs = {
                   vim9-lsp = inputs.vim9-lsp;
                 };
+                # The one package taken from unstable (see the input).
+                devvm.package = inputs.nixpkgs-unstable.legacyPackages.${system}.lima;
                 # What the justfile reads to pick the host. Set by hand once,
                 # before a machine's first switch (BOOTSTRAP.md).
                 environment.variables.NIXHOST = name;

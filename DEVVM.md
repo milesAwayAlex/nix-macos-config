@@ -23,6 +23,9 @@ On the Mac:
 | `~/code-shared` | the one host directory the guest sees, at the same path on both sides | lima-init at boot; the guest's activation puts it back after every switch |
 | `KUBECONFIG`, in every shell | `~/.kube/config` first, the copied kubeconfig second; the tools merge the list | switch |
 | `$TMPDIR/devvm-registry-auth/` | registry credentials that carry an expiry, one file per host, 0600, reused until they expire | the wrappers |
+| `~/Library/LaunchAgents/org.nixos.devvm.plist`, `org.nixos.devvm-doctor.plist` | the job that keeps the VM up, and the one that checks it | switch |
+| `~/.local/state/devvm/` | the doctor's last report, and `doctor.log`, one entry per notification | the doctor's job |
+| `~/Library/Logs/devvm.log` | what either job prints itself; empty when all is well | launchd |
 
 In the guest:
 
@@ -31,7 +34,7 @@ In the guest:
   GRUB copies a 90 MiB kernel-and-initrd pair onto it per menu entry, so the
   menu lists the current generation only; older generations stay in the store
   for `nixos-rebuild --rollback`.
-- The state disk (`devvm-state`, 40 GiB) is mounted at `/var/lib/devvm` and
+- The state disk (`devvm-state`; 128 GiB on the work hosts, 40 by default) is mounted at `/var/lib/devvm` and
   holds what should outlive the OS disk: `ssh/` (sshd's host keys and the
   `builder` user's authorized key) and `rancher/`, bind-mounted onto
   `/var/lib/rancher`, which is k3s's data and the single containerd content
@@ -140,11 +143,33 @@ long as `devvm.dockerShims` is off for the host.
 
 ## Day to day
 
-- `just devvm-up` and `just devvm-down` start and stop. State survives both,
-  and every rebuild. `just devvm-status` is the layered view — instance,
-  builder, cluster, containerd — and the first thing to run when anything
-  looks off. `just devvm-shell [cmd]` runs in the guest, keeping the working
-  directory when it exists on both sides.
+- **The VM is up from login to logout** (D36). A launchd user agent,
+  `org.nixos.devvm`, runs lima's host agent in the foreground: it starts the
+  VM at login, starts it again if the host agent dies — 27 seconds from a
+  `kill -9` to ready, measured — and shuts the guest down cleanly at logout.
+  `just devvm-up` and `just devvm-down` still start and stop it by hand, and
+  state survives both, and every rebuild. A stop stays stopped until the next
+  `devvm-up` or login; `devvm-up` starts the VM through the same job, so it
+  is kept either way.
+- **On the work hosts a plugged-in Mac does not sleep while the VM runs**
+  (`devvm.keepAwake`, D37): the cluster has work on a schedule, and a
+  sleeping Mac freezes the guest. The display still sleeps and locks, on
+  battery the Mac sleeps as usual, and `just devvm-down` lets it sleep on AC
+  again. `pmset -g assertions` shows the `caffeinate` that holds it.
+- **`devvm-doctor` is the first thing to run when anything looks off.** It
+  checks the instance, the guest over ssh, every forwarded port, the guest's
+  clock, disks, mounts and failed units, and on a cluster the API, the node's
+  conditions, the system pods and each `LoadBalancer` and `NodePort` port.
+  For each fault it prints what is wrong and the cure from "When it breaks",
+  and exits 1; it changes nothing. Pods outside `kube-system` are mentioned
+  and never a fault: they are their owner's. launchd runs the same checks
+  every two minutes and posts a notification when a fault has held for two
+  runs, and one more when it clears, so a boot or a wake is not reported.
+  `~/.local/state/devvm/report` is the last run, `doctor.log` beside it one
+  entry per notification. `just devvm-status` is the layered view — instance,
+  builder, cluster, containerd — for looking rather than judging.
+- `just devvm-shell [cmd]` runs in the guest, keeping the working directory
+  when it exists on both sides.
 - `just devvm-rebuild` deploys a guest change from the Mac: it evaluates here,
   then builds and activates in the guest over lima's own ssh identity, as the
   user lima created. The builder role plays no part, so a guest without it
@@ -219,6 +244,9 @@ the images and the disk sizes are honoured only at creation.
 |---|---|---|
 | Anything in the guest's NixOS config | `modules/nixos/devvm` | `just devvm-rebuild` |
 | The lima units themselves, `lima-init` and `lima-guestagent` — the agent's PATH, say | `modules/nixos/devvm` | `just devvm-rebuild`, then `limactl restart devvm`: neither unit restarts at a switch, by design (D22) |
+| lima itself (`devvm.package`, set in `flake.nix`) | `flake.lock` | `just switch`; the running host agent is the old lima until `just devvm-down`, `just devvm-up` |
+| The launchd job that keeps the VM | `modules/darwin/devvm.nix` | `just switch` reloads a job whose plist changed, and that restarts the VM. The job names `devvm-run` by its profile path so that nothing else — a new lima, a nixpkgs bump — changes the plist |
+| Whether the Mac stays awake for the VM (`devvm.keepAwake`) | `hosts/<host>.nix`, or `modules/darwin/work.nix` | `just switch`, then `just devvm-down`, `just devvm-up`: the assertion is taken when the VM starts |
 | Which role set this Mac runs (`devvm.guest`) | `hosts/<host>.nix` | `just switch`, then `just devvm-rebuild .#<name>` once — the hostname follows the attribute from there; the template's kubeconfig copy follows the cluster role, so re-sync the instance copy as above |
 | A role set that does not exist yet | `flake.nix`, one line | as above |
 | CPUs, memory, the shared directory | `hosts/<host>.nix` (`devvm.*`, beside the shims) | `just switch`, re-sync the instance copy, start |
@@ -227,7 +255,32 @@ the images and the disk sizes are honoured only at creation.
 | ssh port | `hosts/<host>.nix` | the same, and both sides before the next start: the daemon's alias and the instance must agree |
 | Seed image or `vmType` | `modules/darwin/devvm.nix` | `just devvm-down`, `limactl delete devvm`, then bootstrap steps 2–3 again. The state disk carries both keys, so no adopt, and the cluster comes back |
 | `nix flake update nixos-lima` | `flake.lock` | `just devvm-rebuild`; the guest protocol module moves, the seed digest does not, and it only matters at the next creation |
+| The state disk's size (`devvm.stateDiskSize`) | `hosts/<host>.nix`, or `modules/darwin/work.nix` for the work hosts | read at creation only. An existing disk grows, never shrinks, by hand: "Growing the state disk", below |
 | The state disk itself | — | `limactl disk delete devvm-state` with the instance stopped: new host key and an empty cluster, so `just devvm-adopt` again |
+
+### Growing the state disk
+
+Done once on `work`, 40 to 128 GiB *(2026-11-19)*, with the cluster's data
+intact. lima refuses to resize a disk a running instance holds, and grows a
+raw one in place; the guest then grows the partition and the filesystem
+while it is mounted. The clone is the way back, free on APFS until the two
+files diverge; delete it once the cluster has been checked.
+
+    just devvm-down
+    /bin/cp -c ~/.lima/_disks/devvm-state/datadisk ~/.local/state/devvm/devvm-state.before-resize.raw
+    limactl disk resize devvm-state --size 128GiB
+    just devvm-up
+    just devvm-shell sudo sfdisk --no-reread --relocate gpt-bak-std /dev/vdb
+    echo ', +' | just devvm-shell sudo sfdisk --no-reread -N 1 /dev/vdb
+    just devvm-shell sudo partx -u /dev/vdb
+    just devvm-shell sudo resize2fs /dev/vdb1
+
+Two `sfdisk` writes, in that order: the backup partition table moves to the
+new end of the disk first, and only then is there room for the partition to
+grow into — in one command the partition stays the size it was. `/dev/vdb`
+is where the disk has been on every boot so far;
+`lsblk -no PKNAME /dev/disk/by-label/lima-devvm-state` is the check. Then
+set `devvm.stateDiskSize` to match, so the next machine is created that way.
 
 ## When it breaks
 
@@ -328,20 +381,35 @@ the images and the disk sizes are honoured only at creation.
   another context meanwhile. **"certificate signed by unknown authority".**
   Another cluster owns localhost:6443 — Rancher Desktop — and lima logged a
   failed forward. Stop it, `limactl restart devvm`.
-- **kubectl: `read: connection reset by peer` or `EOF` on 127.0.0.1:6443, and
-  every other forwarded port does the same, while
-  `just devvm-shell sudo k3s kubectl get nodes` answers.** The forwards are
-  stale: the guest agent restarted under a running host agent, and lima
-  before 2.3.0 keeps each listener on the connection it was created with
-  (lima-vm/lima#5557). `~/.lima/devvm/ha.stderr.log` says
-  `grpc: the client connection is closing` once per attempt, and
-  `devvm-status` names it. ssh rides a forward of its own, so the builder,
+- **A forwarded port takes a connection on the Mac and drops it at once —
+  `connection reset by peer`, `EOF`, an empty reply — while the same port
+  answers in the guest.** The forwards are stale: the guest agent restarted
+  under a running host agent, and lima before 2.3.0 keeps a listener on the
+  connection it was created with (lima-vm/lima#5557). Not every restart does
+  it and not every port goes: on 2.1.3, the third restart of four left every
+  forward dead but the API's *(2026-11-19)*, so kubectl answering proves
+  nothing about the rest. `devvm-doctor` lists the ports, and
+  `~/.lima/devvm/ha.stderr.log` says `grpc: the client connection is closing`
+  once per attempt. ssh rides a forward of its own, so the builder,
   `limactl shell` and the nerdctl wrappers all keep working, which is how
   this goes unnoticed. `limactl restart devvm` is the cure; restarting the
-  agent again is not. The cause was a guest generation whose lima units
-  restarted at a switch — any rebuild after a nixpkgs bump — and a rebuild
-  onto this configuration is the last one that can do it. By hand,
-  `systemctl restart lima-guestagent` in the guest still will.
+  agent again is not. Two things keep it away. The guest's lima units no
+  longer restart at a switch, which is what used to restart the agent; and
+  lima here is 2.3.0, taken ahead of the release train for this fix (D36),
+  where ten agent restarts in a row left nothing stale. A host agent started
+  before that switch is the old lima until the VM is next stopped and
+  started.
+- **The VM is down and does not come back, or keeps restarting.**
+  `launchctl print gui/$(id -u)/org.nixos.devvm` shows the job's state, its
+  last exit code and how often it has run; `~/Library/Logs/devvm.log` has
+  what the job printed before the host agent took over, and
+  `~/.lima/devvm/ha.stderr.log` the rest. A clean exit is never answered: a
+  VM stopped with `devvm-down`, or one that shut itself down, waits for
+  `just devvm-up`. launchd starts a failing job again every 30 seconds.
+- **`devvm-doctor`: "started by hand, so launchd is not keeping it".** The
+  host agent is not the job's process — the VM was up before the job was
+  loaded, or was started with `limactl start`. `just devvm-down`, then
+  `just devvm-up`.
 - **A `LoadBalancer` or `NodePort` service answers in the guest and not on
   the Mac.** The guest agent has no `kubectl` to watch services with: a
   generation from before k3s's was on its PATH, or one since, not yet
@@ -390,7 +458,8 @@ the images and the disk sizes are honoured only at creation.
 ## Removing it
 
 `devvm.enable = false` and `just switch` drops the builder registration, the
-ssh alias, the template and the tools. Then, if the VM should go too:
+ssh alias, the template, the tools and both launchd jobs — and a VM the job
+was keeping stops with it. Then, if the VM should go too:
 
     limactl delete -f devvm
     limactl disk delete devvm-state

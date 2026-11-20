@@ -1355,8 +1355,8 @@ where the unfree predicate is and for the same reason (D18).
   memory and no cmem.
 - `cmem` typed at a prompt reads the token even for commands that need none
   (`cmem scope`); `command cmem` is the binary.
-- The VM is not started at login (PLAN.md backlog). A session opened before
-  `limactl start devvm` has no memory for its whole life.
+- A session opened while the VM is down has no memory for its whole life.
+  The VM was not started at login when this was written; since D36 it is.
 
 *2026-11-19, later:* the memory's token is read from the login keychain,
 not from 1Password at launch (D35), so starting a session asks for nothing.
@@ -1364,6 +1364,13 @@ not from 1Password at launch (D35), so starting a session asks for nothing.
 The copy that can drift is now the keychain's as well as 1Password's:
 after the cluster's Secret is remade, carman rewrites the item and
 `keychain-sync` brings the Mac along.
+
+*2026-11-19, later still:* the settings file also carries a hint
+(`unreachableHint`), which the client appends to what a session is told
+when it starts without memory: run `devvm-doctor` (D36). In the file and
+not the function's environment, which holds the secret and nothing else;
+the option was asked of carman for that reason. It goes with the VM when
+the service moves off it.
 
 **Revisit when.** The harness grows a declared-settings file of its own
 (D13's condition, and then the hooks go there); the service moves off the
@@ -1513,3 +1520,138 @@ start: the session runs and the memory's hook says it has no token.
 that is a new decision, not a new line; a run needs a token inside the
 cluster at rest (the in-cluster design with carman); or 1Password offers an
 approval that survives a lock for named items, which would let the copy go.
+
+## D36 — The dev VM is kept up by launchd and checked by a doctor that repairs nothing *(2026-11-19)*
+
+**Decision.** Three things, all in `modules/darwin/devvm.nix`, on every host
+that runs the VM.
+
+- A launchd user agent, `org.nixos.devvm`, runs `limactl start --foreground`
+  through `devvm-run`: the VM starts at login, comes back when the host agent
+  dies, and is shut down cleanly when launchd stops the job at logout.
+  `just devvm-up` starts the VM through the same job.
+- `devvm-doctor` checks every layer above the instance and prints, for each
+  fault, what is wrong and the cure DEVVM.md already gives. It changes
+  nothing. A second agent runs it every two minutes and posts a notification
+  when the verdict has changed and held for two runs.
+- lima is 2.3.0, from nixpkgs-unstable (`devvm.package`), ahead of the 26.05
+  train's 2.1.3.
+
+**Why.** The cluster carries a workload every Claude Code session expects —
+carman's memory (D33) — which is the trigger the autostart backlog item
+waited for. Until now the VM was up only if someone had started it, died
+uncleanly at every Mac restart, and could lose its port forwards with
+nothing saying so.
+
+**Why the job is shaped this way.** Each line is measured *(2026-11-19)*.
+- `--foreground` makes `limactl` become the host agent, so the job's process
+  is the VM and launchd's SIGTERM reaches it: the guest was down, with a
+  synced filesystem, in 5 to 7 seconds.
+- `KeepAlive = { SuccessfulExit = false; }`: `limactl stop` ends the host
+  agent with status 0 and the job stays down; a `kill -9` had the VM ready
+  again in 27 seconds.
+- `devvm-run` exits 0 when there is no instance, because `limactl start`
+  would create one from lima's default template, and when the VM is already
+  running, because redirecting the logs would truncate a live agent's.
+- The job names `devvm-run` by its profile path. nix-darwin reloads an agent
+  whose plist changed, and a reload is a VM restart; by store path every
+  nixpkgs bump would be one. A new lima reaches the VM at its next start, as
+  it always has (D22 makes the same choice for the guest's lima units). The
+  path is the system profile's, which `darwin-rebuild` sets before it
+  activates. `/run/current-system` is linked after the agents are loaded: on
+  the switch that first added the job launchd found no program there, failed
+  with `EX_CONFIG` and never tried again — on `work`, the first version.
+
+**Why the doctor repairs nothing.** Its one disruptive cure is
+`limactl restart`, which also ends a build on the builder and every nerdctl
+container. Alex's call: notify only, revisit once the notifications say how
+often it would have fired. The harmless cures stay manual with it, so the
+tool has one mode and any agent can run it.
+
+**What the doctor's checks came from.** Testing it found the stale-forward
+fault (DEVVM.md) to be per port: on lima 2.1.3 the third guest agent restart
+of four killed every forward except the API's, and a doctor that asked the
+API alone called that healthy. So it connects to every port the host agent
+listens on and asks the guest about any that hang up at once. On 2.3.0 ten
+restarts in a row left nothing stale — evidence for the upstream fix
+(lima-vm/lima#5557), which is why lima moved.
+
+**Why unstable for one package.** D6 keeps the three release-train inputs
+matched; this is a fourth input used for exactly one package, pinned in the
+lock like the rest, and the lock already held it as nixos-lima's own. 26.11
+is not branched for darwin yet. It goes when the train's lima is 2.3.0 or
+later.
+
+**Why the guest has no NTP client** *(2026-11-20)*. lima 2.3.0 sets the
+guest's clock to the Mac's whenever the two differ by more than 100 ms,
+checked every 10 seconds, and has no setting to stop it. timesyncd steered the
+guest toward NTP, which this Mac's clock trails by about 126 ms: macOS
+corrects in coarse steps, here ±48 ms over a 90 ms round trip. The first night
+on 2.3.0, lima set the guest back about 130 ms 1,502 times in six hours, while
+timesyncd held the kernel's frequency correction at its +500 ppm limit. With
+one source the guest is exactly as right as the Mac. That is close enough for
+every certificate and signed request it handles, and lima corrects the guest
+within 10 seconds of a wake. The doctor's cure for a clock that stays off is
+now a guest agent restart, which 2.3.0 survives with every forward intact.
+
+**Known, and left alone.**
+- A deliberate `just devvm-down` is reported like any other stop, once.
+- The notification is `osascript`'s; whether it shows is the Mac's
+  notification settings for Script Editor.
+- nerdctl containers come back after a restart only if they were created
+  with a restart policy.
+- Nothing here backs up the state disk.
+
+**Revisit when.** The notifications show a fault whose cure is always the
+same restart — then the doctor may apply it, rate-limited; 26.11 lands with
+lima at 2.3.0 or later; or the VM's sleep and wake starts producing faults,
+which it has not in 37 days of daily lid-closed sleep.
+
+## D37 — On the work hosts, a plugged-in Mac stays awake while the dev VM runs *(2026-11-20)*
+
+**Decision.** `devvm.keepAwake`, off by default and on for the work hosts
+(`modules/darwin/work.nix`). With it, the job that keeps the VM (D36) starts
+`caffeinate -s -w` on the host agent's own pid before becoming it: a
+PreventSystemSleep assertion that lasts exactly as long as the VM, and that
+macOS honors on AC power only. The display sleeps and locks as before, and
+on battery the Mac sleeps as before. `personal` keeps its VM up and takes no
+part in this.
+
+**Why.** The cluster runs agents on a schedule — carman's, one of them at
+night. A sleeping Mac freezes the VM, and a plugged-in Mac slept anyway:
+over one morning *(2026-11-19)* it cycled between sleep and short
+maintenance wakes about every 16 minutes, and the guest's journal has lines
+only inside those wakes. A scheduled run is then not merely late: it can
+start in one wake and be frozen mid-run by the next sleep.
+
+**Why this shape.**
+- Tied to the VM and to nothing else, so `just devvm-down` releases it and
+  a host without the VM never holds it.
+- `caffeinate -s` rather than a `pmset` setting: it is scoped to AC by the
+  system, needs no root and leaves no setting behind when the option goes.
+- `-w` on the pid, and not `caffeinate limactl …`: the job's process has to
+  stay the host agent, which is what launchd's SIGTERM must reach (D36).
+
+**Why not the alternatives.**
+- *A scheduled wake* (`pmset repeat`) holds one repeating time, and the
+  schedule has more than one; a wake with nothing asserting lasts under a
+  minute; and with the assertion there is no sleep on AC to wake from.
+- *`pmset disablesleep`* applies on battery too.
+
+**Known, and left alone.**
+- Plugged in with the lid closed, the Mac keeps running and stays warm. It
+  should not travel in a bag while on external power.
+- It holds through a closed lid, measured the first night
+  *(2026-11-20)*: lid closed on AC from 03:15 to 08:56, and macOS answered
+  the close with "Clamshell Sleep" into dark wake and never entered sleep.
+  The guest's journal has no gap over three minutes in those hours, and
+  the nightly run started on time two minutes after the close and
+  finished. The night before, without it, the guest ran in under half the
+  minutes of a comparable stretch, in bursts about 16 minutes apart.
+- On battery at a run's time the run waits for the next wake; how long it
+  may wait is the schedule's own business (a CronJob's
+  `startingDeadlineSeconds`).
+- `devvm-doctor` reports a launchd-kept VM that nothing is holding awake.
+
+**Revisit when.** The scheduled work moves off the laptop with the memory
+service; or the fan or the heat with the lid closed becomes a complaint.

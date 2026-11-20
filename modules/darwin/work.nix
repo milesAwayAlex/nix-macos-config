@@ -113,6 +113,15 @@ in
     # asks for more.
     memory = "8GiB";
 
+    # The cluster's images outgrew the default 40: a sparse file, so the
+    # room costs nothing until used. Read at creation; an existing disk is
+    # grown by hand (DEVVM.md, What a change costs).
+    stateDiskSize = "128GiB";
+
+    # The cluster runs agents on a schedule, at night among other times, and
+    # a sleeping Mac freezes the VM under them (D37). The work hosts only.
+    keepAwake = true;
+
     # One directory, at the identical path on both sides. Not ~ : this guest
     # also runs third-party images, and ~/.ssh, the cloud credentials and
     # 1Password's state have no business inside it.
