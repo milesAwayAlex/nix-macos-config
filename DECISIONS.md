@@ -1709,34 +1709,43 @@ is this public repository's modules.
 
 **The `desk` session** *(2026-11-20)*. On the work Macs, tmux makes a session
 `desk` when its server starts. It runs the attach (`desk`, carman's script)
-in a loop, with its own status bar and prefix off, so every key and the only
-bar in view are the pod's. Alex asked for exactly this: `tmux ls` lists it,
-and `tmux attach -t desk` from a plain shell enters it, with nothing special
-inside tmux. `prefix d` in the pod ends the attach with status 0; the loop
-then detaches the Mac's clients of `desk`, and the terminal is back at the
-shell. Any other exit means the pod is unreachable, and the loop retries
-every 5 seconds without detaching anyone; carman keeps the attach's exit
-status to that contract. `set-clipboard on`, in both tmuxes, lets a copy
-made in the pod reach the terminal, whether tmux's own or a program's such
-as Claude Code's `/copy`. Alex chose that knowing it lets anything in the
-pod, the agent included, overwrite (not read) his clipboard. The pod's tmux
-treats a tmux terminal as having true colour and a clipboard. Measured on
-an isolated server with a stand-in pod:
-- attach at full size;
-- keys and new windows land in the pod;
+in a loop that attaches again whenever the attach ends, so the session
+outlives a pod or VM restart; a non-zero exit means the pod is unreachable,
+and the loop says so and waits 5 seconds. carman keeps the attach's exit
+status to that contract. `tmux ls` lists `desk`, and `tmux attach -t desk`
+enters it, as Alex asked.
+- The session's own status bar and prefix are off, so the bar in view is
+  the pod's. C-Space there opens a key table, `deskprefix`, in which the
+  session keys act on the Mac's tmux exactly as in any other session —
+  `(`, `)`, `w`, `B`, `d`, `D`, `C-z` — and so does `g`, the reading split
+  of the Mac's clipboard, where the pod's copies land. Every other key goes
+  to the pod as C-Space and that key. One set of keys everywhere: Alex's request, after
+  a first version without the table sent `prefix )` into `desk` and then
+  could not leave it, and detached every client on `desk` with one `d`.
+- `set-clipboard on`, in both tmuxes, lets a copy made in the pod reach the
+  terminal, whether tmux's own or a program's such as Claude Code's
+  `/copy`. Alex chose that knowing it lets anything in the pod, the agent
+  included, overwrite (not read) his clipboard. The pod's tmux treats a
+  tmux terminal as having true colour and a clipboard.
+
+Measured on an isolated server with a stand-in pod and two clients, one on
+`0` and one on `desk`:
+- typing and `prefix c` land in the pod;
+- `prefix (`, `)` and `B` move either client in and out of `desk`;
+- `prefix w` in `desk` opens the Mac's session tree;
+- `prefix d` in `desk` detaches that client only, and the pod keeps its
+  connection;
 - true colour and OSC 52 reach the terminal;
-- detach returns to the shell, with `desk` still listed and attached
-  again;
 - with the pod down, `desk` stays and shows the retry line.
 
-Rejected:
-- a key that hands the terminal from the Mac's tmux to the pod's
-  (`detach-client -E`): close, but not a session in the list;
-- a key table that forwards the prefix so session keys act on the Mac:
-  more than Alex wanted.
+carman repeated the earlier version against the real pod.
 
-Known: `prefix d` in `desk` reached from another session detaches the
-terminal rather than returning to that session; on the Mac too, any program
-in any pane may now set the clipboard; a server started before the switch
-has no `desk` until it restarts; and on a Mac without the pod the loop
-retries every 5 seconds.
+Rejected: a key that hands the terminal from the Mac's tmux to the pod's
+(`detach-client -E`) — close, but not a session in the list; and plain
+nesting, which reaches the pod only through a doubled prefix.
+
+Known: the key table covers letters, digits, punctuation, C-letters and the
+named keys, and a prefixed key outside it is dropped; on the Mac too, any
+program in any pane may now set the clipboard; a server started before the
+switch has no `desk` until it restarts or sources its configuration; and on
+a Mac without the pod the loop retries every 5 seconds.

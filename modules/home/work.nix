@@ -42,19 +42,54 @@ let
       exec ${lib.escapeShellArg "${config.home.homeDirectory}/code/tmp/carman/scripts/deploy.sh"} devvm agent attach desk
     '';
   };
-  # What the `desk` session runs. The attach returns 0 when the pod's tmux
-  # was detached, and that takes this session's clients with it; otherwise
-  # the pod is unreachable, and it tries again. Either way `desk` stays.
+  # What the `desk` session runs: the attach, again whenever it ends, so the
+  # session outlives a pod or VM restart. 0 means the pod's client was
+  # detached there; anything else means the pod is unreachable.
   deskLoop = pkgs.writeShellScript "desk-loop" ''
     while true; do
-      if ${lib.getExe desk}; then
-        ${config.programs.tmux.package}/bin/tmux detach-client -s desk
-      else
+      if ! ${lib.getExe desk}; then
         echo "desk: the agent pod is not reachable; trying again in 5 seconds"
-        sleep 5
+        sleep 4
       fi
+      sleep 1
     done
   '';
+  # Inside `desk`, prefix + these act on this Mac's tmux, as in any other
+  # session: choosing, switching and leaving sessions, and g, the reading
+  # split of the Mac's clipboard (tmux.nix), where the pod's copies land.
+  # Every other prefixed key is the pod's.
+  deskLocalKeys = {
+    g = "split-window -h -l 59 'pbpaste | glo'";
+    "(" = "switch-client -p";
+    ")" = "switch-client -n";
+    w = "choose-tree -Zw";
+    B = "switch-client -l";
+    d = "detach-client";
+    D = "choose-client -Z";
+    C-z = "suspend-client";
+  };
+  deskForwardedKeys = lib.subtractLists (lib.attrNames deskLocalKeys) (
+    lib.stringToCharacters "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789`~!@#$%^&*()-_=+[]{}\\|;:'\",.<>/?"
+    ++ map (c: "C-${c}") (lib.stringToCharacters "abcdefghijklmnopqrstuvwxyz")
+    ++ [
+      "C-Space"
+      "Space"
+      "Enter"
+      "Escape"
+      "Tab"
+      "BSpace"
+      "Up"
+      "Down"
+      "Left"
+      "Right"
+      "PageUp"
+      "PageDown"
+      "Home"
+      "End"
+    ]
+  );
+  # A key as one tmux config token.
+  tmuxKey = key: if key == "'" then "\"'\"" else "'${key}'";
 
   # Keychain copies of 1Password items, service name to reference (D35):
   # tokens that sessions and unattended runs read without a prompt.
@@ -109,14 +144,25 @@ in
 
   # The pod's tmux as `desk`, a session of this server made at its start
   # (D38): tmux ls lists it and tmux attach -t desk enters it. Its own
-  # status and prefix are off, so every key and the only bar are the pod's.
-  # set-clipboard on passes the pod's copies out to the terminal.
+  # status and prefix are off, so the bar is the pod's; C-Space there opens
+  # deskprefix, where the session keys act here and the rest go to the pod
+  # as prefix+key. set-clipboard on passes the pod's copies out.
   programs.tmux.extraConfig = lib.mkAfter ''
     set -g set-clipboard on
+    bind -T desk C-Space switch-client -T deskprefix
+    ${lib.concatStrings (
+      lib.mapAttrsToList (key: command: ''
+        bind -T deskprefix ${tmuxKey key} ${command}
+      '') deskLocalKeys
+    )}
+    ${lib.concatMapStrings (key: ''
+      bind -T deskprefix ${tmuxKey key} send-keys C-Space ${tmuxKey key}
+    '') deskForwardedKeys}
     new-session -d -s desk ${deskLoop}
     set -t desk status off
     set -t desk prefix None
     set -t desk prefix2 None
+    set -t desk key-table desk
   '';
 
   # 1Password is this machine's ssh agent. Two things about the line itself:
