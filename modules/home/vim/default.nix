@@ -34,7 +34,7 @@ in
     # did nothing. --enable-darwin wires the real pasteboard. Costs a local
     # source build (no cache hit for a non-default override).
     packageConfigurable = pkgs.vim-full.override {
-      darwinSupport = true;
+      darwinSupport = pkgs.stdenv.hostPlatform.isDarwin;
       guiSupport = false; # terminal only; the default would pull GTK
     };
 

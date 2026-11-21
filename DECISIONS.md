@@ -1655,3 +1655,88 @@ start in one wake and be frozen mid-run by the next sleep.
 
 **Revisit when.** The scheduled work moves off the laptop with the memory
 service; or the fan or the heat with the lid closed becomes a complaint.
+
+## D38 — Alex's shell, exported for the agent pod as a flake output *(2026-11-20)*
+
+**Decision.** `packages.aarch64-linux.agent-home`, built from
+`homeConfigurations.agent` (`modules/home/agent.nix`): the shared home
+modules — bash with its prompt and readline, tmux with its bindings and the
+scratchpad, vim with its plugins and language servers, git, the GNU
+userland and the staples — for a Linux user `agent` whose home is
+`/home/agent`. The image for carman's standing agent pod copies its closure.
+This repository owns it, and the image is rebuilt to pick up a change. The
+tree holds `profile` (home-manager's package set), `home` (its dotfiles) and
+`bin/agent-home-link`, which puts both into the home volume when the pod
+starts.
+
+**Why.** Alex wants the pod's shell to feel like his own, the scratchpad
+above all. The same modules configure the Mac, so one change lands in both.
+
+**Why this shape.**
+- home-manager builds it but does not activate it: activation needs a nix
+  daemon and a writable profile, and the pod has neither. What activation
+  would do here is a profile link and one link per file, and
+  agent-home-link does both.
+- The home is a volume that hides whatever the image puts there, so the
+  links are made at every start. Links an earlier image made and this one
+  does not are removed; a real file in the way is kept beside its link as
+  `<name>.before-agent-home`.
+- What is macOS-only is a condition in the shared modules, not a copy:
+  tmux's `prefix g` (pbpaste) exists on the Mac only, `prefix y` sends the
+  scrollback through OSC 52 elsewhere, vim's pasteboard support follows the
+  platform, and UTM and the terminal font are Mac-only packages. The Mac's
+  build is unchanged but for one tmux comment.
+- Two Linux-only lines, both measured in `node:22-slim` as the pod's uid:
+  Debian's `/etc/profile` resets `PATH` in every login shell, tmux's panes
+  among them, so `.bashrc` puts the profile back in front; and
+  home-manager's default carries every glibc locale, 220 MiB, where one
+  will do.
+
+**What is left out.** The employer's module (the `claude` wrapper, the
+keychain copies, 1Password, spacectl), gcloud and k8s, gh and ssh (logins),
+node (the image has its own), glow (its config path and `prefix g` are
+macOS's), alacritty, karabiner, and the git identity: commits from the pod
+carry whatever identity the pod is given. Nothing in the tree is secret; it
+is this public repository's modules.
+
+**Known, and left alone.**
+- The closure is 1.7 GiB, most of it vim's language servers. The image
+  never leaves the machine.
+- vim is a non-default build, so the builder compiles it rather than
+  substituting it.
+- Session variables reach login shells only, which tmux's panes are; the
+  tmux server itself runs with the pod's environment.
+
+**The `desk` session** *(2026-11-20)*. On the work Macs, tmux makes a session
+`desk` when its server starts. It runs the attach (`desk`, carman's script)
+in a loop, with its own status bar and prefix off, so every key and the only
+bar in view are the pod's. Alex asked for exactly this: `tmux ls` lists it,
+and `tmux attach -t desk` from a plain shell enters it, with nothing special
+inside tmux. `prefix d` in the pod ends the attach with status 0; the loop
+then detaches the Mac's clients of `desk`, and the terminal is back at the
+shell. Any other exit means the pod is unreachable, and the loop retries
+every 5 seconds without detaching anyone; carman keeps the attach's exit
+status to that contract. `set-clipboard on`, in both tmuxes, lets a copy
+made in the pod reach the terminal, whether tmux's own or a program's such
+as Claude Code's `/copy`. Alex chose that knowing it lets anything in the
+pod, the agent included, overwrite (not read) his clipboard. The pod's tmux
+treats a tmux terminal as having true colour and a clipboard. Measured on
+an isolated server with a stand-in pod:
+- attach at full size;
+- keys and new windows land in the pod;
+- true colour and OSC 52 reach the terminal;
+- detach returns to the shell, with `desk` still listed and attached
+  again;
+- with the pod down, `desk` stays and shows the retry line.
+
+Rejected:
+- a key that hands the terminal from the Mac's tmux to the pod's
+  (`detach-client -E`): close, but not a session in the list;
+- a key table that forwards the prefix so session keys act on the Mac:
+  more than Alex wanted.
+
+Known: `prefix d` in `desk` reached from another session detaches the
+terminal rather than returning to that session; on the Mac too, any program
+in any pane may now set the clipboard; a server started before the switch
+has no `desk` until it restarts; and on a Mac without the pod the loop
+retries every 5 seconds.

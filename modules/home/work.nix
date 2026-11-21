@@ -2,6 +2,7 @@
 # employer's platform choices, split out so a consumer of these modules can
 # take everything else without them (D17).
 {
+  config,
   lib,
   pkgs,
   ...
@@ -31,6 +32,29 @@ let
     # service is on the dev VM, so the VM's own check is the place to look.
     unreachableHint = "Run `devvm-doctor` to see what is wrong with the dev VM that serves it, and the cure.";
   };
+
+  # The agent pod's tmux, attached from this terminal (D38). carman's deploy
+  # script, from its checkout, knows the pod and how to attach.
+  desk = pkgs.writeShellApplication {
+    name = "desk";
+    runtimeInputs = [ pkgs.kubectl ];
+    text = ''
+      exec ${lib.escapeShellArg "${config.home.homeDirectory}/code/tmp/carman/scripts/deploy.sh"} devvm agent attach desk
+    '';
+  };
+  # What the `desk` session runs. The attach returns 0 when the pod's tmux
+  # was detached, and that takes this session's clients with it; otherwise
+  # the pod is unreachable, and it tries again. Either way `desk` stays.
+  deskLoop = pkgs.writeShellScript "desk-loop" ''
+    while true; do
+      if ${lib.getExe desk}; then
+        ${config.programs.tmux.package}/bin/tmux detach-client -s desk
+      else
+        echo "desk: the agent pod is not reachable; trying again in 5 seconds"
+        sleep 5
+      fi
+    done
+  '';
 
   # Keychain copies of 1Password items, service name to reference (D35):
   # tokens that sessions and unattended runs read without a prompt.
@@ -80,7 +104,20 @@ in
     # `cmem recall` by name; the hooks do not need it there.
     carman.cmem
     keychainSync
+    desk
   ];
+
+  # The pod's tmux as `desk`, a session of this server made at its start
+  # (D38): tmux ls lists it and tmux attach -t desk enters it. Its own
+  # status and prefix are off, so every key and the only bar are the pod's.
+  # set-clipboard on passes the pod's copies out to the terminal.
+  programs.tmux.extraConfig = lib.mkAfter ''
+    set -g set-clipboard on
+    new-session -d -s desk ${deskLoop}
+    set -t desk status off
+    set -t desk prefix None
+    set -t desk prefix2 None
+  '';
 
   # 1Password is this machine's ssh agent. Two things about the line itself:
   # it is `Host *` because a machine has one agent, and the value is quoted

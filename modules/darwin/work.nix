@@ -108,10 +108,10 @@ in
     enable = true;
     guest = self.nixosConfigurations.devvm;
 
-    # 8 GiB: sized beside Docker Desktop's own VM and kept after its
-    # retirement — Docker ran on 8 for years, so this moves when something
-    # asks for more.
-    memory = "8GiB";
+    # 12 GiB: at least 8 for the standing agent pod on the cluster, the rest
+    # for the cluster itself and builds. A running VM keeps the old size
+    # until the instance copy is re-synced (DEVVM.md, What a change costs).
+    memory = "12GiB";
 
     # The cluster's images outgrew the default 40: a sparse file, so the
     # room costs nothing until used. Read at creation; an existing disk is

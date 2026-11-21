@@ -174,8 +174,23 @@
       darwinModules.redis = ./modules/darwin/redis.nix;
       darwinModules.work = ./modules/darwin/work.nix;
 
-      # Packages this repo maintains itself because nixpkgs has none (D14).
-      packages.${system}.kube-fzf = pkgs.callPackage ./packages/kube-fzf.nix { };
+      # Alex's shell for the agent pod on the dev VM's cluster (D38).
+      homeConfigurations.agent = home-manager.lib.homeManagerConfiguration {
+        pkgs = nixpkgs.legacyPackages.aarch64-linux;
+        extraSpecialArgs.vim9-lsp = inputs.vim9-lsp;
+        modules = [ ./modules/home/agent.nix ];
+      };
+
+      packages = {
+        # Packages this repo maintains itself because nixpkgs has none (D14).
+        ${system}.kube-fzf = pkgs.callPackage ./packages/kube-fzf.nix { };
+        # What the agent pod's image copies (D38).
+        aarch64-linux.agent-home =
+          nixpkgs.legacyPackages.aarch64-linux.callPackage ./packages/agent-home.nix
+            {
+              home = self.homeConfigurations.agent;
+            };
+      };
 
       devShells.${system}.default = pkgs.mkShell {
         packages = [

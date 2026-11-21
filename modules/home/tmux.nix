@@ -3,7 +3,12 @@
 # /usr/share/terminfo. Truecolor is advertised per-outer rather than by
 # pattern because alacritty's terminfo lacks RGB. focus-events is on for
 # editor autoread.
-{ config, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   view = pkgs.writeShellApplication {
     name = "tmux-view";
@@ -139,14 +144,19 @@ in
       # at, two columns of glow margin each side. Called by name: it sits in
       # the profile bin beside tmux itself, so wherever tmux resolved, glo
       # does too.
-      bind g split-window -h -l 59 'pbpaste | glo'
+      ${lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
+        bind g split-window -h -l 59 'pbpaste | glo'
+      ''}
 
       # Persistent Markdown scratchpad; Vim owns saving and explicit copying.
       # Session IDs contain '$'; single quotes protect them from the shell.
       bind e run-shell "${scratchpad}/bin/tmux-scratchpad '#{pane_id}' '#{session_id}'"
 
-      # Whole scrollback → macOS clipboard (sharing, feeding to Claude).
-      bind y { run-shell 'tmux capture-pane -p -S - | pbcopy'; display-message "scrollback copied" }
+      # Whole scrollback → the clipboard (sharing, feeding to Claude): pbcopy
+      # on the Mac, elsewhere OSC 52 through to the outer terminal.
+      bind y { run-shell 'tmux capture-pane -p -S - | ${
+        if pkgs.stdenv.hostPlatform.isDarwin then "pbcopy" else "tmux load-buffer -w -"
+      }'; display-message "scrollback copied" }
 
       # Copy-mode: vi select/yank; y stays in copy mode (deliberate, plain
       # copy-selection). set-clipboard's default (external) plus alacritty's

@@ -24,11 +24,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1795214545,
-        "narHash": "sha256-I/UPMNWKCPeZADbiLqPFZUMage+d2SRV2JW6bKAOh7U=",
+        "lastModified": 1795222357,
+        "narHash": "sha256-j+r+DDsCNIz4kHJPO5Qu7FLhNiUqXPvGxbCDL+OnUG0=",
         "owner": "milesAwayAlex",
         "repo": "carman",
-        "rev": "19b2e9f34ec4f718cb989413620851ed2ea9dab8",
+        "rev": "b998721f6a6b3091d4e4fa10a06621f97c262a4f",
         "type": "github"
       },
       "original": {
