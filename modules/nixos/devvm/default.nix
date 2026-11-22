@@ -31,6 +31,28 @@ let
       "/run/containerd/containerd.sock";
   namespace = if cfg.cluster.enable then "k8s.io" else "default";
 
+  # The build cache's cap, in sizes (D40). BuildKit's defaults are shares of
+  # the disk under its own directory, the OS disk, while the cache lives
+  # beside the images.
+  buildkitdConfig = (pkgs.formats.toml { }).generate "buildkitd.toml" {
+    worker.containerd.gcpolicy = [
+      {
+        filters = [
+          "type==source.local"
+          "type==exec.cachemount"
+          "type==source.git.checkout"
+        ];
+        keepDuration = "48h";
+        maxUsedSpace = "512MB";
+      }
+      {
+        all = true;
+        reservedSpace = "5GB";
+        maxUsedSpace = "25GB";
+      }
+    ];
+  };
+
   # lima labels an `additionalDisks` volume `lima-<name>`; it also mounts it,
   # but only from a boot script that its own guest images run and a NixOS guest
   # never sees, so the mount and the one-time format are ours (below).
@@ -92,6 +114,7 @@ in
 {
   imports = [
     (modulesPath + "/profiles/qemu-guest.nix")
+    ./agent-builds.nix
     ./services.nix
   ];
 
@@ -437,6 +460,7 @@ in
             Type = "notify";
             ExecStart = lib.concatStringsSep " " [
               "${pkgs.buildkit}/bin/buildkitd"
+              "--config=${buildkitdConfig}"
               "--oci-worker=false"
               "--containerd-worker=true"
               "--containerd-worker-addr=${socket}"

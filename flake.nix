@@ -142,6 +142,7 @@
               containers.enable = true;
               cluster.enable = true;
               services.enable = true;
+              agentBuilds.enable = true;
             };
             devvm-builder = { };
           };

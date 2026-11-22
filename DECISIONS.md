@@ -1798,12 +1798,19 @@ needs to be kept from the cluster's pods.
   work hosts and does not know either one's home directory.
 
 **Moved** by dump and restore, all 89 databases (Alex: everything now,
-clean up later): `pg_dumpall | psql` through `kubectl exec`, 69 s, one
-error (the `postgres` role already existed). Measured against the Mac after a
-trial run: the same databases, owners, collations and roles; the same 13,778
-tables, views, indexes and sequences; the same row count in every one of
-3,475 tables. Extensions come back at the image's versions. Redis started
-empty: Alex's call, 11 keys of queue state.
+clean up later): `pg_dumpall | psql` through `kubectl exec`, 64 s, one
+error (the `postgres` role already existed), after a trial run of the same.
+The final copy, measured against the Mac before the switch stopped it: the
+same databases, owners, collations and roles; the same 13,778 tables,
+views, indexes and sequences; the same row count in every one of 3,475
+tables (4,141,768 rows) and the same value in every sequence. Extensions
+come back at the image's versions. Redis started empty: Alex's call, 11 keys
+of queue state. The first nightly dump, run by hand: 31 s, 193 MB.
+
+At the cutover the Services existed before the Mac's servers stopped, so
+lima's binds failed and were never retried (DEVVM.md, When it breaks);
+recreating the two Services fixed it. A tmux server from before the switch
+hands new panes its old environment, without `PGHOST`, until it restarts.
 
 **Known, and left alone.**
 - lima's forwards are IPv4 only, and macOS resolves `localhost` to ::1
@@ -1813,3 +1820,74 @@ empty: Alex's call, 11 keys of queue state.
   `~/.local/share/redis`, stay until deleted by hand.
 - A volume is deleted with its claim (local-path's policy); deleting the
   StatefulSet keeps it.
+- k3s pins every image it imports, so the kubelet never collects a
+  superseded one: `devvm-services-images` removes the `devvm.local` tags the
+  manifests no longer name, at each rebuild. By name, with `ctr`: `crictl
+  rmi` deletes every tag of an image, and in testing took the current Redis
+  image along with a stale tag. k3s does not import a file again once it
+  has, so that image went back by `ctr images import` and a pin label.
+
+## D40 — Agents build images through a daemon and a registry of their own *(2026-11-22)*
+
+**Decision.** Agents in the cluster build with `buildkitd-agents`
+(`modules/nixos/devvm/agent-builds.nix`, `devvm.agentBuilds.enable` in the
+`devvm` role set), not with the daemon the Mac's `docker` uses. Its socket is
+`/run/buildkit-agents/buildkitd.sock`, owned by group `agent-builds`
+(gid 10100); its worker is k3s's containerd in the namespace `agents`. Images
+are pushed to a registry on the node, distribution on `127.0.0.1:5050`, and
+pods name them `localhost:5050/NAME:TAG`. The Mac's daemon gets an explicit
+build-cache cap of 25 GB.
+
+**Why.** Alex's terms: a separate daemon and registry that do not clash with
+the cluster's images, a guard against unbounded growth, and disk left for the
+agents. The Mac's daemon writes to `k8s.io`, the namespace the kubelet runs
+images from, so a client of it could overwrite any tag the cluster starts,
+system pods included: in effect root on the VM.
+
+**Why this shape.**
+- One containerd, another namespace: the layers are shared (a base image
+  already in the store is not downloaded again, measured), the image names
+  are not, and the kubelet reads only `k8s.io`.
+- The registry listens on the node's loopback: the daemons push to it and
+  k3s's containerd pulls from it, and no pod reaches it. BuildKit and
+  containerd both speak plain HTTP to localhost; k3s needed no registry
+  configuration (measured).
+- The socket's directory is 0770 and the socket 0660, both group 10100. A pod
+  joins the group as a supplemental group and mounts the directory by
+  hostPath, which a daemon restart does not invalidate. The path is
+  nerdctl's convention for a namespace's daemon.
+- The daemon's state is on the state disk, beside the layers, because
+  BuildKit measures `minFreeSpace` on the filesystem of its own directory.
+  The same mistake set the Mac's daemon's defaults: shares of the 59 GB OS
+  disk, 47 GB max and "12 GB free" measured on the wrong disk.
+
+**Caps.** The agents' build cache: 10 GB, and 15 GB kept free on the state
+disk. The `agents` namespace's image records: all pruned daily, since builds
+are meant for the registry. The registry: daily, tags not pushed for seven
+days go, then older ones while it is over 15 GiB, then its garbage collection
+(`agent-builds-prune`, with the registry stopped). The Mac's daemon: 25 GB,
+which freed nothing on the day: of the 50 GB its cache reported, 47.3 GB were
+layers shared with images in the store, and a prune to 25 GB removed nothing.
+The disk (84%, 20 GB free, 2026-11-22) is images: 94 untagged, nearly all
+superseded builds from carman's deploys, beside 15 `carman-agent` and 7
+`agent-base` tags.
+
+**Measured** with a throwaway daemon and registry, since removed: as uid
+10001 without group 10100 the socket refused the connection, and with it a
+build pushed `localhost:5050/probe:1`; a pod pulled that image in 28 ms and
+ran it; nothing appeared in `k8s.io` but the pulled copy. The new daemon
+config parses on BuildKit 0.30.0, and the Mac's daemon accepts its config
+file beside its flags.
+
+**Known, and left alone.**
+- RUN steps run on the node's network, as on the Mac's daemon: they reach
+  the internet without carman's proxy, and loopback services on the node and
+  the Mac. A CNI network for this daemon is the follow-up if that matters.
+- One registry for every agent: any client can push over another's tag
+  under `localhost:5050`.
+- lima forwards the registry to the Mac's 127.0.0.1:5050, as it does every
+  guest listener.
+- An image dropped from the registry stays on the node while `k8s.io` holds
+  the pulled copy; the kubelet's image GC removes unused ones at 95%.
+- The pod's side — the hostPath, the supplemental group, a `buildctl` 0.30
+  client — is carman's.

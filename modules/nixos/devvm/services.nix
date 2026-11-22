@@ -198,6 +198,31 @@ in
       redisImage
     ];
 
+    # k3s pins what it imports, so the kubelet's image GC never removes a
+    # superseded one; each rebuild removes the devvm.local tags no longer
+    # named here. By name with ctr, not crictl rmi, which deletes every tag
+    # of the image, a current one included.
+    systemd.services.devvm-services-images = {
+      description = "Remove devvm.local images the services no longer use";
+      wantedBy = [ "multi-user.target" ];
+      after = [ "k3s.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+      };
+      path = [ config.services.k3s.package ];
+      script = ''
+        keep=" ${ref postgresImage} ${ref redisImage} "
+        k3s ctr -n k8s.io images ls -q | grep '^devvm\.local/[^@]*$' |
+          while read -r image; do
+            case "$keep" in
+              *" $image "*) ;;
+              *) k3s ctr -n k8s.io images rm "$image" ;;
+            esac
+          done
+      '';
+    };
+
     services.k3s.manifests.devvm-services.content = [
       {
         apiVersion = "v1";

@@ -40,8 +40,9 @@ In the guest:
   holds what should outlive the OS disk: `ssh/` (sshd's host keys and the
   `builder` user's authorized key) and `rancher/`, bind-mounted onto
   `/var/lib/rancher`, which is k3s's data and the single containerd content
-  store behind nerdctl, buildkit and the cluster alike; a builder-only guest
-  keeps `ssh/` and nothing else. The guest formats it
+  store behind nerdctl, buildkit and the cluster alike; `registry/`, the
+  agents' registry, and `buildkit-agents/`, their daemon's own state (D40). A
+  builder-only guest keeps `ssh/` and nothing else. The guest formats it
   once, on the first boot of this configuration, and refuses any device that
   already carries a signature.
 - Everything else is a NixOS generation.
@@ -222,6 +223,16 @@ long as `devvm.dockerShims` is off for the host.
   this flake and imported by k3s when a guest rebuild links them, a few
   seconds later, so an image change is `just devvm-rebuild` and nothing more.
   `kubectl -n services exec -it postgres-0 -- psql` is a shell on the server.
+- **Agents' image builds** (D40) go through a BuildKit daemon of their own,
+  `buildkitd-agents`, at `/run/buildkit-agents/buildkitd.sock`; a pod reaches
+  it by mounting that directory and joining group 10100. It writes to the
+  containerd namespace `agents`, which the cluster never reads, and pushes to
+  the registry on the node, `localhost:5050`, from which the cluster pulls:
+  a pod names such an image `localhost:5050/NAME:TAG`. Caps: 10 GB of build
+  cache, the `agents` namespace's images pruned daily, and the registry's
+  tags dropped after a week unpushed, sooner while it is over 15 GiB
+  (`agent-builds-prune`, daily). The Mac's own builds keep the other daemon,
+  whose cache is capped at 25 GB.
 - **The builder** is transparent: any `aarch64-linux` derivation the daemon is
   asked for goes to the guest. `just devvm-check` is the proof when in doubt.
 - **Registry credentials** are resolved on the Mac and never stored in the
@@ -430,7 +441,11 @@ set `devvm.stateDiskSize` to match, so the next machine is created that way.
   `just devvm-shell pgrep -a kubectl` (by name — k3s's multicall binary
   blanks its arguments). With the watch running, look
   for the port in `ha.stderr.log`: `Forwarding TCP` when it worked,
-  `failed to listen` when the Mac already had that port.
+  `failed to listen` when the Mac already had that port. lima does not
+  retry that bind once the Mac frees the port, and restarting the guest
+  agent does not make it: the port never left the guest. Delete and
+  recreate the Service (`kubectl get svc NAME -o yaml`, delete, apply), or
+  restart the VM; seen at the Postgres cutover (D39).
 - **A pull is refused with `401` or "unauthorized".** The registry is not in
   `devvm.registryAuth`, or its command failed — the wrapper says so on stderr
   before nerdctl runs, and for gcr.io that is usually `gcloud auth login`
