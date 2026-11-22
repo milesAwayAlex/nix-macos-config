@@ -19,6 +19,7 @@
   home.stateVersion = "26.05";
 
   home.packages = with pkgs; [
+    kubernetes-helm # the work hosts' helm (k8s.nix), for charts' checks
     less # git's pager; the slim image has none
     ncurses # terminfo for tmux-256color and the Mac's alacritty
     tzdata

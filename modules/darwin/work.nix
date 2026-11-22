@@ -108,10 +108,10 @@ in
     enable = true;
     guest = self.nixosConfigurations.devvm;
 
-    # 12 GiB: at least 8 for the standing agent pod on the cluster, the rest
-    # for the cluster itself and builds. A running VM keeps the old size
-    # until the instance copy is re-synced (DEVVM.md, What a change costs).
-    memory = "12GiB";
+    # 20 GiB of the work Macs' 32 or more: 14 for the desk agent pod, the
+    # rest for the cluster's services and builds. A running VM keeps the old
+    # size until the instance copy is re-synced (DEVVM.md, What a change costs).
+    memory = "20GiB";
 
     # The cluster's images outgrew the default 40: a sparse file, so the
     # room costs nothing until used. Read at creation; an existing disk is

@@ -173,7 +173,7 @@ let
         else
           if ! cred=$(bash -c "''${commands[$host]}") ||
             ! jq -e 'has("Username") and has("Secret")' <<<"$cred" >/dev/null 2>&1; then
-            echo "devvm: no credentials for $host: its command failed or printed no {Username, Secret}" >&2
+            echo "devvm: no credentials for $host (its command failed or printed no {Username, Secret}); going on without them, so only public images pull from it" >&2
             continue
           fi
           if jq -e 'has("ExpiresAt")' <<<"$cred" >/dev/null; then

@@ -1693,7 +1693,9 @@ above all. The same modules configure the Mac, so one change lands in both.
   will do.
 
 **What is left out.** The employer's module (the `claude` wrapper, the
-keychain copies, 1Password, spacectl), gcloud and k8s, gh and ssh (logins),
+keychain copies, 1Password, spacectl), gcloud and k8s but for helm (the
+image brings kubectl), a project's toolchain such as Go (the project's
+own flake pins it, at the version its checks use), gh and ssh (logins),
 node (the image has its own), glow (its config path and `prefix g` are
 macOS's), alacritty, karabiner, and the git identity: commits from the pod
 carry whatever identity the pod is given. Nothing in the tree is secret; it
