@@ -476,11 +476,20 @@ set `devvm.stateDiskSize` to match, so the next machine is created that way.
   runs from an empty directory there. An absolute Mac path outside it gives an
   empty volume instead — bind mounts resolve in the guest, and root there
   creates the missing directory.
-- **The guest's disk fills.** The kubelet garbage-collects the shared content
-  store from 95 % down to 90 %, oldest images first, and an image built with
-  nerdctl that no pod runs is fair game. `nerdctl system prune` is aimed at the
-  cluster's images too (same namespace); prefer `nerdctl image rm` by name, or
-  `crictl rmi --prune` for what the kubelet would take anyway.
+- **The guest's disk fills.** `devvm-doctor` says so at 90 %. Most of what
+  grows has a cap of its own (D40): the build caches (25 GB for the Mac's
+  builds, 10 GB for the agents'), the agents' images and registry (pruned
+  daily, the registry kept under 15 GiB), the services' images (each rebuild
+  drops superseded ones), build records (a week, 100 per daemon), the
+  journal, the Nix store and the cluster's finished jobs. Two things have
+  none: images in `k8s.io`, which the kubelet garbage-collects from 95 % down
+  to 90 %, oldest first, an image built with nerdctl that no pod runs
+  included; and the cluster's volumes — agents' homes, Postgres — which
+  local-path does not limit (`du -sh /var/lib/rancher/k3s/storage/*`).
+  `nerdctl system prune` is aimed at the cluster's images too (same
+  namespace); prefer `nerdctl image rm` by name, or `crictl rmi --prune` for
+  what the kubelet would take anyway. `crictl rmi NAME` deletes every tag of
+  that image; `k3s ctr -n k8s.io images rm NAME` drops the one name.
 
 ## Removing it
 

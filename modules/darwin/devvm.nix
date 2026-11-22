@@ -235,7 +235,10 @@ let
   # agent, which shuts the guest down when launchd asks it to stop.
   devvm-run = pkgs.writeShellApplication {
     name = "devvm-run";
-    runtimeInputs = [ cfg.package ];
+    runtimeInputs = [
+      cfg.package
+      pkgs.gnugrep
+    ];
     text = ''
       # Nothing to keep without an instance, and `limactl start` would make
       # one from lima's default template. One started by hand is left alone.
@@ -250,9 +253,12 @@ let
         /usr/bin/caffeinate -s -w $$ &
       ''}
       # The files lima itself writes when it starts the agent detached, so
-      # the logs are where DEVVM.md says, whoever started the VM.
+      # the logs are where DEVVM.md says, whoever started the VM. Less the
+      # agent's debug lines, written at any log level: four per proxied
+      # connection, about 15 MB a day for as long as the VM runs.
       exec limactl start --foreground --tty=false ${name} \
-        >"$HOME/.lima/${name}/ha.stdout.log" 2>"$HOME/.lima/${name}/ha.stderr.log"
+        >"$HOME/.lima/${name}/ha.stdout.log" \
+        2> >(grep --line-buffered -v '"level":"debug"' >"$HOME/.lima/${name}/ha.stderr.log")
     '';
   };
 

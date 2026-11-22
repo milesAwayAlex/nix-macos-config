@@ -25,6 +25,10 @@ let
     # On the state disk, where the layers are: minFreeSpace is measured on
     # the filesystem that holds this directory.
     root = "${stateDir}/buildkit-${namespace}";
+    history = {
+      maxAge = "168h";
+      maxEntries = 100;
+    };
     grpc = {
       address = [ "unix://${socketDir}/buildkitd.sock" ];
       inherit (cfg) gid;

@@ -33,8 +33,12 @@ let
 
   # The build cache's cap, in sizes (D40). BuildKit's defaults are shares of
   # the disk under its own directory, the OS disk, while the cache lives
-  # beside the images.
+  # beside the images. Build records too: unset, they were not expiring.
   buildkitdConfig = (pkgs.formats.toml { }).generate "buildkitd.toml" {
+    history = {
+      maxAge = "168h";
+      maxEntries = 100;
+    };
     worker.containerd.gcpolicy = [
       {
         filters = [

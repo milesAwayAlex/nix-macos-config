@@ -1891,3 +1891,21 @@ file beside its flags.
   the pulled copy; the kubelet's image GC removes unused ones at 95%.
 - The pod's side — the hostPath, the supplemental group, a `buildctl` 0.30
   client — is carman's.
+
+**What grows, and what bounds it** *(audit, 2026-11-22)*. On the state disk:
+build caches (25 and 10 GB, above), the `agents` namespace and the registry
+(daily), the services' images (`devvm-services-images`, D39), build records
+(a week and 100 per daemon; unset, the Mac's daemon held 166 records from
+three days, about 5 MB a day), images in `k8s.io` (the kubelet, 95 % to
+90 %), and the cluster's volumes, which nothing bounds: agents' homes and
+Postgres grow with use, and `devvm-doctor` warns at 90 %. carman's finished
+jobs expire (its CronJobs keep 5 to 7 runs, its jobs 3 days). On the OS disk:
+the Nix store (weekly, 14 days, and a 5 GiB floor), the journal (journald's
+own 10 % or 4 GB), pod logs (kubelet rotation). Postgres's WAL stays at
+`max_wal_size`, 1 GB: no slots, no archiving. On the Mac: lima's
+`ha.stderr.log`, which the agent writes at debug level whatever it is told,
+four lines per proxied connection, about 15 MB a day for as long as the VM
+runs — `devvm-run` drops the debug lines (40 of 13,276 were anything else,
+and those are the ones DEVVM.md names); truncating the file in place does
+not help, lima writes on at its own offset. The nightly dump replaces
+itself, and the Mac's Nix store is collected as the guest's is.

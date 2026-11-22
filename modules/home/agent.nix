@@ -19,6 +19,9 @@
   home.stateVersion = "26.05";
 
   home.packages = with pkgs; [
+    # The client of the agents' build daemon (D40), at the daemon's version;
+    # only buildctl on PATH, the daemon is the node's.
+    (runCommand "buildctl" { } "mkdir -p $out/bin && ln -s ${buildkit}/bin/buildctl $out/bin/")
     kubernetes-helm # the work hosts' helm (k8s.nix), for charts' checks
     less # git's pager; the slim image has none
     ncurses # terminfo for tmux-256color and the Mac's alacritty
