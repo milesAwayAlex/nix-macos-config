@@ -1039,7 +1039,7 @@ bought.
 cluster's images and the development images want different lifetimes — then the
 registry fallback earns its three copies.
 
-## D24 — Development services are launchd user agents on the Mac *(2026-09-06)*
+## D24 — Development services are launchd user agents on the Mac *(2026-09-06; superseded by D39)*
 
 **Decision.** The services the work code expects at their default ports —
 redis and postgres today — run on the Mac as nix-darwin services
@@ -1751,3 +1751,65 @@ named keys, and a prefixed key outside it is dropped; on the Mac too, any
 program in any pane may now set the clipboard; a server started before the
 switch has no `desk` until it restarts or sources its configuration; and on
 a Mac without the pod the loop retries every 5 seconds.
+
+## D39 — Postgres and Redis run in the dev VM's cluster *(2026-11-22)*
+
+**Decision.** The services the work code expects at their default ports run
+in the k3s cluster's `services` namespace, declared by the guest
+(`modules/nixos/devvm/services.nix`, `devvm.services.enable` in the `devvm`
+role set): one Postgres and one Redis, each a StatefulSet with a local-path
+volume and a LoadBalancer service on 5432 and 6379. lima forwards both to the
+Mac's 127.0.0.1, so the work code keeps `localhost:5432` and `:6379`. The Mac
+keeps the clients, `PGHOST=127.0.0.1` so `psql` with no arguments still
+works, and a nightly `pg_dumpall` into `~/code-shared/postgres-dumps`
+(`modules/darwin/devvm.nix`, on when the guest has the services). Supersedes
+D24.
+The agent pod's shell (D38) has `psql` and `redis-cli` too, with `PGHOST`
+at `postgres.services` and `PGUSER` alexm, as on the Mac.
+
+**Why.** D24's own condition for revisiting: the cluster has always-on
+workloads and the VM is kept up by launchd (D36). Alex's cue was the finding
+that anything in the VM reached the Mac's Postgres as a superuser through
+lima's gateway; the servers belong with the other services, and nothing
+needs to be kept from the cluster's pods.
+
+**Why this shape.**
+- The images are built here from nixpkgs — Postgres 16.16, PostGIS 3.6.4,
+  pgvector 0.8.2, Redis 8.8.4, the versions the Mac ran — and handed to k3s
+  through `services.k3s.images`. k3s 1.35 imports an image linked there
+  while running, in seconds, and pins it against image garbage collection;
+  the pods name it by its Nix hash and never pull. PostGIS is built without
+  its JIT bitcode, which referenced clang and LLVM: the server has no JIT,
+  and the image went from 759 to 239 MB compressed.
+- Trust from anywhere and no passwords, as on the Mac: Alex's call, nothing
+  in the cluster is kept away from them.
+- Settings: only the initdb locale, `en_US.UTF-8`. The dump names it for
+  every database, so the image must carry it anyway, and it gives new
+  databases (test suites make them) the collation Cloud SQL has, and
+  `english` as the text search default. The Mac's `max_connections = 300`
+  was dropped: Alex's call; put it back if a test run says "too many
+  clients". Time zone is UTC, as it was GMT.
+- No fsGroup: local-path makes each volume 0777 already, and fsGroup's chmod
+  at every pod start leaves the data directory group-writable, which
+  Postgres refuses (seen on the first restart).
+- The image's stop signal is SIGINT, Postgres's fast shutdown; SIGTERM would
+  wait for every client to disconnect.
+- The dump is the Mac's job, not a CronJob: the guest is shared by both
+  work hosts and does not know either one's home directory.
+
+**Moved** by dump and restore, all 89 databases (Alex: everything now,
+clean up later): `pg_dumpall | psql` through `kubectl exec`, 69 s, one
+error (the `postgres` role already existed). Measured against the Mac after a
+trial run: the same databases, owners, collations and roles; the same 13,778
+tables, views, indexes and sequences; the same row count in every one of
+3,475 tables. Extensions come back at the image's versions. Redis started
+empty: Alex's call, 11 keys of queue state.
+
+**Known, and left alone.**
+- lima's forwards are IPv4 only, and macOS resolves `localhost` to ::1
+  first; a client that tries ::1 alone fails. Node (20 and later) and Java
+  fall back to 127.0.0.1.
+- The Mac's old data directories, `~/.local/share/postgresql/16` and
+  `~/.local/share/redis`, stay until deleted by hand.
+- A volume is deleted with its claim (local-path's policy); deleting the
+  StatefulSet keeps it.

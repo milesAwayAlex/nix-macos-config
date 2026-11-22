@@ -39,13 +39,6 @@ let
   buildCaBundle = "/etc/nix/build-ca-certificates.crt";
 in
 {
-  imports = [
-    # Development services the work code expects at their default ports (D24);
-    # `personal` runs none.
-    ./postgresql.nix
-    ./redis.nix
-  ];
-
   # The password manager is per host (D19): its cask and its agent socket
   # (../home/work.nix) sit together; the browser extension is a hand install
   # (BOOTSTRAP.md). 1Password's cask verifies the real bundle for browser

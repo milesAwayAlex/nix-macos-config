@@ -260,6 +260,24 @@ let
   # wrong, and the cure DEVVM.md gives. It changes nothing (D36). `--notify`
   # is launchd's run: silent, and a notification when the verdict has changed
   # and held for two runs, so a boot or a wake is not reported as a fault.
+  # The cluster's Postgres, whole, into the shared directory, replacing the
+  # last dump (D39).
+  postgres-dump = pkgs.writeShellApplication {
+    name = "postgres-dump";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.gzip
+      pkgs.postgresql_16
+    ];
+    text = ''
+      dir=${lib.escapeShellArg "${cfg.mount}/postgres-dumps"}
+      mkdir -p "$dir"
+      pg_dumpall -h 127.0.0.1 -U postgres | gzip > "$dir/.postgres.sql.gz.tmp"
+      mv "$dir/.postgres.sql.gz.tmp" "$dir/postgres.sql.gz"
+      echo "postgres-dump: $(date '+%F %T') $(du -h "$dir/postgres.sql.gz" | cut -f1)"
+    '';
+  };
+
   devvm-doctor = pkgs.writeShellApplication {
     name = "devvm-doctor";
     runtimeInputs = [
@@ -943,6 +961,33 @@ in
         # name while the VM runs and vanishes with it: kubectl skips a missing
         # file, and fails fast if the current context lived in it.
         environment.variables.KUBECONFIG = "$HOME/.kube/config:${kubeconfig}";
+      })
+
+      (lib.mkIf roles.services.enable {
+        # The cluster's Postgres and Redis (D39) reach this Mac as lima's
+        # forwards on 127.0.0.1:5432 and :6379. PGHOST because psql's default
+        # is a unix socket here, and no server runs here now.
+        environment.systemPackages = [
+          pkgs.postgresql_16
+          pkgs.redis
+        ];
+        environment.variables.PGHOST = "127.0.0.1";
+      })
+
+      (lib.mkIf (roles.services.enable && cfg.mount != null) {
+        environment.systemPackages = [ postgres-dump ];
+        launchd.user.agents.postgres-dump.serviceConfig = {
+          ProgramArguments = [ (lib.getExe postgres-dump) ];
+          StartCalendarInterval = [
+            {
+              Hour = 2;
+              Minute = 0;
+            }
+          ];
+          ProcessType = "Background";
+          StandardOutPath = agentLog;
+          StandardErrorPath = agentLog;
+        };
       })
 
       (lib.mkIf roles.builder.enable {

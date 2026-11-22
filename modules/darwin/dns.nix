@@ -144,8 +144,8 @@ let
   };
 in
 {
-  # Port 53 needs root, so these are daemons rather than the user agents redis
-  # uses. launchd has no ordering primitive; the stack tolerates that because
+  # Port 53 needs root, so these are daemons rather than user agents.
+  # launchd has no ordering primitive; the stack tolerates that because
   # blocky's startVerifyUpstream defaults off and KeepAlive retries.
   launchd.daemons = {
     dnsmasq = {

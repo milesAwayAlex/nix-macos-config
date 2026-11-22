@@ -22,6 +22,8 @@
     kubernetes-helm # the work hosts' helm (k8s.nix), for charts' checks
     less # git's pager; the slim image has none
     ncurses # terminfo for tmux-256color and the Mac's alacritty
+    postgresql_16 # psql, for the cluster's Postgres (D39)
+    redis # redis-cli: `redis-cli -h redis.services`
     tzdata
   ];
 
@@ -31,10 +33,13 @@
     PATH="$HOME/.nix-profile/bin:$PATH"
   '';
 
-  # The empty last entry keeps the image's own terminfo directories.
+  # TERMINFO_DIRS's empty last entry keeps the image's own directories. psql
+  # as on the Mac: the cluster's Postgres, as alexm, who owns most databases.
   home.sessionVariables = {
     TERMINFO_DIRS = "${pkgs.ncurses}/share/terminfo:";
     TZDIR = "${pkgs.tzdata}/share/zoneinfo";
+    PGHOST = "postgres.services";
+    PGUSER = "alexm";
   };
 
   # Inside the Mac's `desk` session (modules/home/work.nix) the terminal is

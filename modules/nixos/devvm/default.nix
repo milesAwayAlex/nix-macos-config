@@ -90,7 +90,10 @@ let
   };
 in
 {
-  imports = [ (modulesPath + "/profiles/qemu-guest.nix") ];
+  imports = [
+    (modulesPath + "/profiles/qemu-guest.nix")
+    ./services.nix
+  ];
 
   options.devvm = {
     builder = {

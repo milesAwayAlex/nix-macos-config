@@ -22,8 +22,10 @@ On the Mac:
 | `~/.lima/_disks/devvm-state/` | the state disk | `devvm-up` |
 | `~/code-shared` | the one host directory the guest sees, at the same path on both sides | lima-init at boot; the guest's activation puts it back after every switch |
 | `KUBECONFIG`, in every shell | `~/.kube/config` first, the copied kubeconfig second; the tools merge the list | switch |
+| `PGHOST`, in every shell | `127.0.0.1`: psql's default is a local socket, and Postgres is in the cluster (D39) | switch |
+| `~/code-shared/postgres-dumps/postgres.sql.gz` | the whole of the cluster's Postgres, gzipped, replaced nightly at 02:00; `postgres-dump` makes one now | `org.nixos.postgres-dump` |
 | `$TMPDIR/devvm-registry-auth/` | registry credentials that carry an expiry, one file per host, 0600, reused until they expire | the wrappers |
-| `~/Library/LaunchAgents/org.nixos.devvm.plist`, `org.nixos.devvm-doctor.plist` | the job that keeps the VM up, and the one that checks it | switch |
+| `~/Library/LaunchAgents/org.nixos.devvm.plist`, `org.nixos.devvm-doctor.plist`, `org.nixos.postgres-dump.plist` | the job that keeps the VM up, the one that checks it, and the nightly dump | switch |
 | `~/.local/state/devvm/` | the doctor's last report, and `doctor.log`, one entry per notification | the doctor's job |
 | `~/Library/Logs/devvm.log` | what either job prints itself; empty when all is well | launchd |
 
@@ -210,6 +212,16 @@ long as `devvm.dockerShims` is off for the host.
   `kubectl port-forward`. A port the Mac already uses is skipped with a
   warning in `~/.lima/devvm/ha.stderr.log`, and the listeners are loopback
   only — nothing here is reachable from the network.
+- **Postgres and Redis** run in the cluster's `services` namespace (D39), on
+  the ports the work code expects, so `localhost:5432` and `:6379` on the Mac
+  are lima's forwards of their LoadBalancer services. Postgres 16 with
+  PostGIS and pgvector, trust from anywhere, no passwords; `psql` with no
+  arguments works through `PGHOST`. From pods, `postgres.services` and
+  `redis.services`. Their data is on local-path volumes under the state
+  disk, and the volumes outlive the StatefulSets. The images are built by
+  this flake and imported by k3s when a guest rebuild links them, a few
+  seconds later, so an image change is `just devvm-rebuild` and nothing more.
+  `kubectl -n services exec -it postgres-0 -- psql` is a shell on the server.
 - **The builder** is transparent: any `aarch64-linux` derivation the daemon is
   asked for goes to the guest. `just devvm-check` is the proof when in doubt.
 - **Registry credentials** are resolved on the Mac and never stored in the
@@ -249,7 +261,7 @@ the images and the disk sizes are honoured only at creation.
 | Whether the Mac stays awake for the VM (`devvm.keepAwake`) | `hosts/<host>.nix`, or `modules/darwin/work.nix` | `just switch`, then `just devvm-down`, `just devvm-up`: the assertion is taken when the VM starts |
 | Which role set this Mac runs (`devvm.guest`) | `hosts/<host>.nix` | `just switch`, then `just devvm-rebuild .#<name>` once — the hostname follows the attribute from there; the template's kubeconfig copy follows the cluster role, so re-sync the instance copy as above |
 | A role set that does not exist yet | `flake.nix`, one line | as above |
-| CPUs, memory, the shared directory | `hosts/<host>.nix` (`devvm.*`, beside the shims) | `just switch`, re-sync the instance copy, start |
+| CPUs, memory, the shared directory | `hosts/<host>.nix` (`devvm.*`, beside the shims), or `modules/darwin/work.nix` for the work hosts | `just switch`, re-sync the instance copy, start |
 | Nested virtualization (`devvm.nestedVirtualization`; M3 and later, off by default) | `hosts/<host>.nix` | a template key: `just switch`, re-sync the instance copy, start. The builder advertises `kvm` either way; without `/dev/kvm` the VM behind such a build runs under TCG |
 | A registry host, or how its credential is made | `hosts/<host>.nix` (`devvm.registryAuth`) | `just switch`; a guest from before the credential store needs one `just devvm-rebuild` |
 | ssh port | `hosts/<host>.nix` | the same, and both sides before the next start: the daemon's alias and the instance must agree |

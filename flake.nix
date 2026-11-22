@@ -141,6 +141,7 @@
             devvm = {
               containers.enable = true;
               cluster.enable = true;
+              services.enable = true;
             };
             devvm-builder = { };
           };
@@ -169,9 +170,7 @@
       darwinModules.homebrew = ./modules/darwin/homebrew.nix;
       darwinModules.input = ./modules/darwin/input;
       darwinModules.pam = ./modules/darwin/pam.nix;
-      darwinModules.postgresql = ./modules/darwin/postgresql.nix;
       darwinModules.preferences = ./modules/darwin/preferences.nix;
-      darwinModules.redis = ./modules/darwin/redis.nix;
       darwinModules.work = ./modules/darwin/work.nix;
 
       # Alex's shell for the agent pod on the dev VM's cluster (D38).
