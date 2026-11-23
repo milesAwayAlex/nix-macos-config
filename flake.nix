@@ -83,6 +83,7 @@
             ./modules/darwin/dns.nix
             ./modules/darwin/homebrew.nix
             ./modules/darwin/input
+            ./modules/darwin/objects.nix
             ./modules/darwin/pam.nix
             ./modules/darwin/preferences.nix
             inputs.nix-homebrew.darwinModules.nix-homebrew
@@ -142,7 +143,11 @@
               containers.enable = true;
               cluster.enable = true;
               services.enable = true;
-              agentBuilds.enable = true;
+              agentBuilds = {
+                enable = true;
+                # carman's own images, which its agents start from (D45).
+                registryOwners = [ "carman" ];
+              };
             };
             devvm-builder = { };
           };
@@ -170,6 +175,7 @@
       darwinModules.dns = ./modules/darwin/dns.nix;
       darwinModules.homebrew = ./modules/darwin/homebrew.nix;
       darwinModules.input = ./modules/darwin/input;
+      darwinModules.objects = ./modules/darwin/objects.nix;
       darwinModules.pam = ./modules/darwin/pam.nix;
       darwinModules.preferences = ./modules/darwin/preferences.nix;
       darwinModules.work = ./modules/darwin/work.nix;

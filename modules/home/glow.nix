@@ -1,6 +1,6 @@
-# ~/Library/Preferences/glow/glow.yml. On macOS glow reads it regardless of
-# XDG_CONFIG_HOME, so home.file targets it directly instead of xdg.configFile.
-# Consequence of HM ownership: `glow config` can no longer edit it in place.
+# glow and `glo`, with glow's config where glow looks: ~/Library/Preferences
+# on macOS, whatever XDG_CONFIG_HOME says, and ~/.config elsewhere. Owned by
+# home-manager, so `glow config` cannot edit it in place.
 { pkgs, ... }:
 let
   # glow for prose some tool hard-wrapped at 80: deno fmt joins the
@@ -19,6 +19,11 @@ let
         | deno run ${./glo-tables.ts} | glow -
     '';
   };
+  configPath =
+    if pkgs.stdenv.hostPlatform.isDarwin then
+      "Library/Preferences/glow/glow.yml"
+    else
+      ".config/glow/glow.yml";
 in
 {
   home.packages = [
@@ -26,7 +31,7 @@ in
     glo
   ];
 
-  home.file."Library/Preferences/glow/glow.yml".text = ''
+  home.file.${configPath}.text = ''
     # style name or JSON path (default "auto"); vim uses the same one
     style: "dracula"
     # mouse support (TUI-mode only)

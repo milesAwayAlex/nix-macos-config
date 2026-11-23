@@ -55,11 +55,9 @@ let
     done
   '';
   # Inside `desk`, prefix + these act on this Mac's tmux, as in any other
-  # session: choosing, switching and leaving sessions, and g, the reading
-  # split of the Mac's clipboard (tmux.nix), where the pod's copies land.
-  # Every other prefixed key is the pod's.
+  # session: choosing, switching and leaving sessions. Every other prefixed
+  # key is the pod's, g among them, so its reading split is a pane there.
   deskLocalKeys = {
-    g = "split-window -h -l 59 'pbpaste | glo'";
     "(" = "switch-client -p";
     ")" = "switch-client -n";
     w = "choose-tree -Zw";

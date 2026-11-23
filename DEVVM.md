@@ -18,16 +18,20 @@ On the Mac:
 | `/etc/nix/devvm_ed25519`, `.pub` | the builder identity, root-only; never in the repo or the store | first switch |
 | `/etc/nix/devvm_known_hosts` | the guest's host key, pinned under the alias `devvm` | `devvm-adopt` |
 | `/etc/nix/machines`, `/etc/ssh/ssh_config.d/101-devvm.conf` | builder registration, and the `Host devvm` alias the daemon's ssh resolves | switch |
-| `~/.lima/devvm/` | lima's instance: OS disk, logs, `ssh.config`, and `copied-from-guest/kubeconfig.yaml` while the VM runs | `devvm-up` |
+| `~/.lima/devvm/` | lima's instance: OS disk, logs (the agent's capped while the VM runs, D40), `ssh.config`, and `copied-from-guest/kubeconfig.yaml` while the VM runs | `devvm-up` |
 | `~/.lima/_disks/devvm-state/` | the state disk | `devvm-up` |
 | `~/code-shared` | the one host directory the guest sees, at the same path on both sides | lima-init at boot; the guest's activation puts it back after every switch |
 | `KUBECONFIG`, in every shell | `~/.kube/config` first, the copied kubeconfig second; the tools merge the list | switch |
 | `PGHOST`, in every shell | `127.0.0.1`: psql's default is a local socket, and Postgres is in the cluster (D39) | switch |
 | `~/code-shared/postgres-dumps/postgres.sql.gz` | the whole of the cluster's Postgres, gzipped, replaced nightly at 02:00; `postgres-dump` makes one now | `org.nixos.postgres-dump` |
+| `~/.local/share/devvm-objects/` | the object store (D43): `data/` holds each bucket's current objects as plain files, `versions/` the replaced ones, `iam/` the buckets' keys; 0700 | `org.nixos.devvm-objects` |
+| login keychain: `devvm-objects-admin`, `devvm-objects-BUCKET` | the store's admin secret, made at its first start, and each bucket's key, made by `devvm-objects-bucket` | the store, the command |
+| login keychain: `devvm-registry-OWNER` | an owner's key to its repositories in the agents' registry (D45); the guest holds only its hash | `devvm-registry-key` |
 | `$TMPDIR/devvm-registry-auth/` | registry credentials that carry an expiry, one file per host, 0600, reused until they expire | the wrappers |
-| `~/Library/LaunchAgents/org.nixos.devvm.plist`, `org.nixos.devvm-doctor.plist`, `org.nixos.postgres-dump.plist` | the job that keeps the VM up, the one that checks it, and the nightly dump | switch |
+| `~/Library/LaunchAgents/org.nixos.devvm.plist`, `org.nixos.devvm-doctor.plist`, `org.nixos.postgres-dump.plist`, `org.nixos.devvm-objects.plist`, `org.nixos.devvm-objects-expire.plist` | the job that keeps the VM up, the one that checks it, the nightly dump, the object store, and its daily expiry of replaced versions at 06:00 | switch |
 | `~/.local/state/devvm/` | the doctor's last report, and `doctor.log`, one entry per notification | the doctor's job |
 | `~/Library/Logs/devvm.log` | what either job prints itself; empty when all is well | launchd |
+| `~/Library/Logs/devvm-objects.log` | the store's start banner and errors, and one line per bucket from each expiry run | launchd |
 
 In the guest:
 
@@ -41,7 +45,8 @@ In the guest:
   `builder` user's authorized key) and `rancher/`, bind-mounted onto
   `/var/lib/rancher`, which is k3s's data and the single containerd content
   store behind nerdctl, buildkit and the cluster alike; `registry/`, the
-  agents' registry, and `buildkit-agents/`, their daemon's own state (D40). A
+  agents' registry, `registry-auth/`, its owners' key hashes (D45), and
+  `buildkit-agents/`, their daemon's own state (D40). A
   builder-only guest keeps `ssh/` and nothing else. The guest formats it
   once, on the first boot of this configuration, and refuses any device that
   already carries a signature.
@@ -228,11 +233,31 @@ long as `devvm.dockerShims` is off for the host.
   it by mounting that directory and joining group 10100. It writes to the
   containerd namespace `agents`, which the cluster never reads, and pushes to
   the registry on the node, `localhost:5050`, from which the cluster pulls:
-  a pod names such an image `localhost:5050/NAME:TAG`. Caps: 10 GB of build
+  a pod names such an image `localhost:5050/NAME:TAG`. A pod itself reaches
+  the registry at `10.42.0.1:5050`, where its network policy allows it.
+  Reads are open; so are writes, except to an owner's repositories
+  (`carman`, `carman-*`, `carman/*`), which take the owner's key (D45):
+  `devvm-registry-key OWNER` makes it in the login keychain as
+  `devvm-registry-OWNER`, installs its hash in the guest, and says how to
+  read it; run again, it puts the same key back. The journal has a line per
+  write, with its user: `journalctl -t registry_writes`. A build's RUN steps run on
+  a network of their own, `10.89.0.0/24`: the internet and lima's DNS, but
+  not the node, the pods, the services or the Mac. Caps: 10 GB of build
   cache, the `agents` namespace's images pruned daily, and the registry's
-  tags dropped after a week unpushed, sooner while it is over 15 GiB
-  (`agent-builds-prune`, daily). The Mac's own builds keep the other daemon,
+  tags dropped after a week unpushed, sooner while it is over 15 GiB, except
+  a tag a workload names (`agent-builds-prune`, daily). The Mac's own builds keep the other daemon,
   whose cache is capped at 25 GB.
+- **The object store** (D43) is on the Mac, not in the VM: versitygw,
+  `org.nixos.devvm-objects`, on `127.0.0.1:7070`, which the cluster reaches
+  as `http://192.168.5.2:7070`, lima's gateway to the Mac's loopback. S3,
+  region `us-east-1`, path-style. `devvm-objects-bucket NAME` makes a
+  versioned bucket and its key, access key id `NAME`, the secret in the login
+  keychain as `devvm-objects-NAME`, and says how to read it; run again, it
+  changes nothing. The key reads, writes, lists and deletes objects; it
+  cannot delete a replaced version or change the bucket. A replaced version
+  is kept 30 days from its replacement (`devvm-objects-expire`, daily; it
+  takes `--dry-run`). It runs while the VM is down, and survives the VM.
+  The store lives on this Mac only: nothing copies it off.
 - **The builder** is transparent: any `aarch64-linux` derivation the daemon is
   asked for goes to the guest. `just devvm-check` is the proof when in doubt.
 - **Registry credentials** are resolved on the Mac and never stored in the
@@ -440,7 +465,7 @@ set `devvm.stateDiskSize` to match, so the next machine is created that way.
   is the watch itself, a `kubectl` process the agent keeps running:
   `just devvm-shell pgrep -a kubectl` (by name — k3s's multicall binary
   blanks its arguments). With the watch running, look
-  for the port in `ha.stderr.log`: `Forwarding TCP` when it worked,
+  for the port in `ha.stderr.log` (`grep -a`): `Forwarding TCP` when it worked,
   `failed to listen` when the Mac already had that port. lima does not
   retry that bind once the Mac frees the port, and restarting the guest
   agent does not make it: the port never left the guest. Delete and
@@ -481,15 +506,41 @@ set `devvm.stateDiskSize` to match, so the next machine is created that way.
   builds, 10 GB for the agents'), the agents' images and registry (pruned
   daily, the registry kept under 15 GiB), the services' images (each rebuild
   drops superseded ones), build records (a week, 100 per daemon), the
-  journal, the Nix store and the cluster's finished jobs. Two things have
-  none: images in `k8s.io`, which the kubelet garbage-collects from 95 % down
-  to 90 %, oldest first, an image built with nerdctl that no pod runs
-  included; and the cluster's volumes — agents' homes, Postgres — which
-  local-path does not limit (`du -sh /var/lib/rancher/k3s/storage/*`).
+  journal, the Nix store, old k3s versions' binaries and the cluster's
+  finished jobs. Images in `k8s.io` the kubelet garbage-collects from 80 %
+  down to 70 %, oldest first, an image built with nerdctl that no pod runs
+  included: name images in the registry, `localhost:5050`, and a freed one
+  is pulled back, or `nerdctl pull` it again. The cluster's volumes —
+  agents' homes, Postgres — have no cap, and local-path does not limit them
+  (`du -sh /var/lib/rancher/k3s/storage/*`).
   `nerdctl system prune` is aimed at the cluster's images too (same
   namespace); prefer `nerdctl image rm` by name, or `crictl rmi --prune` for
   what the kubelet would take anyway. `crictl rmi NAME` deletes every tag of
   that image; `k3s ctr -n k8s.io images rm NAME` drops the one name.
+
+- **A bucket's current objects are gone** — a job or an agent deleted them
+  with the bucket's key. Every deletion left a delete marker over the old
+  version for 30 days. As the admin, removing the markers made after the
+  damage brings the objects back; any S3 client works, `aws s3api
+  list-object-versions` and `delete-object --version-id`, with key id `admin`
+  and the secret from `devvm-objects-admin`. A restic repository brought
+  back this way also gets its old locks and pruned packs back: `restic unlock
+  --remove-all`, then `restic check`, whose duplicate packs are harmless and
+  which `restic repair index` tidies (tried, 2026-11-22).
+- **A push to an owner's repository is refused with `401`.** The push
+  carried no key or the wrong one, or the guest has none for that owner yet:
+  a new state disk, or a guest from before D45. `devvm-registry-key OWNER`
+  installs it again from the keychain, the same key. A push to any other
+  repository needs none.
+- **A build's RUN step cannot reach a host.** Only the internet and lima's
+  DNS are open to it (D45): the node, the pods, the services, the Mac and
+  private ranges are closed by `agent-builds-network`
+  (`iptables -t raw -S AGENT-BUILDS`). A build that needs one of those is a
+  change to D45, not a rule added by hand.
+- **`devvm-doctor`: "the object store does not answer".** Its log,
+  `~/Library/Logs/devvm-objects.log`, says why; a locked login keychain is
+  the one case it cannot start in. `launchctl kickstart -k
+  gui/$UID/org.nixos.devvm-objects` once that is fixed.
 
 ## Removing it
 

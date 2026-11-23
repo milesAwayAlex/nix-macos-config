@@ -5,7 +5,6 @@
 # editor autoread.
 {
   config,
-  lib,
   pkgs,
   ...
 }:
@@ -138,15 +137,16 @@ in
       bind N next-window -a
       bind P previous-window -a
 
-      # Render clipboard markdown in a reading split, darwin-only. glo
-      # (glow.nix) unwraps the paragraphs and lets glow take the pane's
-      # width, so 59 gives the 55 text columns a monospace line reads best
-      # at, two columns of glow margin each side. Called by name: it sits in
-      # the profile bin beside tmux itself, so wherever tmux resolved, glo
-      # does too.
-      ${lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
-        bind g split-window -h -l 59 'pbpaste | glo'
-      ''}
+      # Render the last copy as markdown in a reading split: the clipboard on
+      # the Mac, elsewhere tmux's newest buffer, where copies made inside this
+      # tmux land (set-clipboard). glo (glow.nix) unwraps the paragraphs and
+      # lets glow take the pane's width, so 59 gives the 55 text columns a
+      # monospace line reads best at, two columns of glow margin each side.
+      # Called by name: it sits in the profile bin beside tmux itself, so
+      # wherever tmux resolved, glo does too.
+      bind g split-window -h -l 59 '${
+        if pkgs.stdenv.hostPlatform.isDarwin then "pbpaste" else "tmux save-buffer -"
+      } | glo'
 
       # Persistent Markdown scratchpad; Vim owns saving and explicit copying.
       # Session IDs contain '$'; single quotes protect them from the shell.

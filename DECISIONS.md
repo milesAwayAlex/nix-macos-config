@@ -989,7 +989,8 @@ memory is actively wrong. And the kubelet is a garbage collector on the same
 store: above `imageGCHighThresholdPercent` it frees images it considers unused,
 counting only CRI-managed containers as users, so an image built here that no
 pod happens to be running is eligible. The thresholds are therefore raised to
-95/90 via `--kubelet-arg` rather than left at 85/80.
+95/90 via `--kubelet-arg` rather than left at 85/80. (Lowered to 80/70 once
+the cluster's images came from a registry: D40, Image GC at 80 %.)
 
 **The Mac-side wrappers do not guess the working directory.** `nerdctl`,
 `docker` and `docker-compose` on the Mac are `limactl shell` wrappers. lima's
@@ -1015,7 +1016,10 @@ whose stated expiry is still ahead, kept 0600 in the per-user temp directory,
 the same exposure as gcloud's own token store — and pass the result in one
 variable. That variable rides the SSH session (`SendEnv` on the Mac, `AcceptEnv`
 in the guest) rather than lima's `env` prefix, so it is on no command line on
-either side. In the guest, `docker-credential-devvm` is nerdctl's credential
+either side. The session is on a connection of its own (`ControlPath=none`):
+lima keeps a shared one, and a session on it gets only the variables that
+connection was opened with (amended 2026-11-25, when carman's first
+authenticated push arrived without its key). In the guest, `docker-credential-devvm` is nerdctl's credential
 store: it answers from the variable for the declared hosts, returns the
 protocol's not-found sentinel for everything else, and refuses `store`, so a
 login cannot leave anything behind. The expiry comes from the issuer: for
@@ -1448,6 +1452,13 @@ remotes is cosmetic, and was not done.
   what the config says — so it lists both forms.
 - Only github.com. A remote anywhere else still uses the key and still
   prompts.
+- ssh to github.com itself gets no agent (`IdentityAgent none`,
+  `modules/home/ssh.nix`): with git on HTTPS nothing needs it, and agents
+  checking their access with `ssh -T git@github.com` still asked 1Password
+  for the key about once a day. It now fails at once with
+  `Permission denied (publickey)`, after a harmless "Load key … invalid
+  format" from 1Password's bookmark. `gh auth status` is the check
+  (amended 2026-11-26, when a watcher caught a headless run's probe).
 - The `claude` function sets `GIT_TERMINAL_PROMPT=0` and `GH_PROMPT_DISABLED=1`.
   Measured, a session's tools have no terminal, so neither git nor gh could
   wait on one before: the variables change the error an agent reads
@@ -1652,6 +1663,14 @@ start in one wake and be frozen mid-run by the next sleep.
   may wait is the schedule's own business (a CronJob's
   `startingDeadlineSeconds`).
 - `devvm-doctor` reports a launchd-kept VM that nothing is holding awake.
+- *(2026-11-22)* A restart left a gap. The assertion was tied to the run, so
+  it ended with the old run, and the new run took it only after its status
+  check: on the restart test, a closed Mac on AC entered "Clamshell Sleep" in
+  the second the old run ended, and the VM started 15 minutes later, at a
+  maintenance wake. After a crash launchd waits 30 s, so the gap is certain
+  there. Now the assertion is taken first, holds for two minutes after the
+  run ends, and lives in a session of its own, since launchd kills a job's
+  process group when the job ends; tested in isolation with that kill.
 
 **Revisit when.** The scheduled work moves off the laptop with the memory
 service; or the fan or the heat with the lid closed becomes a complaint.
@@ -1751,6 +1770,29 @@ named keys, and a prefixed key outside it is dropped; on the Mac too, any
 program in any pane may now set the clipboard; a server started before the
 switch has no `desk` until it restarts or sources its configuration; and on
 a Mac without the pod the loop retries every 5 seconds.
+
+*2026-11-23:* the reading split moved into the pod, and the pod's Claude Code
+takes Alex's preferences. Both were Alex's reports; carman found the causes.
+- `prefix g` exists off the Mac too: there it renders tmux's newest buffer
+  (`tmux save-buffer -`), where copy mode's yanks and Claude Code's `/copy`
+  land, instead of the clipboard. glow and `glo` are in the pod's tree, and
+  glow's config is at `~/.config/glow/glow.yml` there. In `desk`, `g` is no
+  longer one of the Mac's keys; it goes to the pod like `e`. Why: the Mac's
+  split was a pane of the Mac's tmux, and `h`/`j`/`k`/`l` go to the pod, so
+  it could not be reached. The scratchpad never had the problem, being the
+  pod's own pane. Rejected: making the pane keys the Mac's while `desk` has
+  a split, since a session's panes should travel with its pod, and sessions
+  are moving to a pod each. Given up: in `desk`, `g` shows the last copy
+  made in the pod, not one made on the Mac.
+- `agentHome.claudeSettings` (`modules/home/agent.nix`): keys agent-home-link
+  writes into `~/.claude/settings.json` at each start, over what the file
+  holds: `editorMode` vim and `theme` dark-ansi, as on the Mac. The file
+  stays a real one: carman's start merges its own keys after this and keeps
+  what is set, and the harness rewrites it (D13). A file that is not JSON is
+  left alone. The declared value wins, so a change made with `/config` in
+  the pod lasts until the next start. The Mac's file stays the harness's
+  (D13), so a preference changed there reaches the pod by an edit here.
+  Model and effort are carman's choice, not the shell's, and are not set.
 
 ## D39 — Postgres and Redis run in the dev VM's cluster *(2026-11-22)*
 
@@ -1885,10 +1927,14 @@ file beside its flags.
   the Mac. A CNI network for this daemon is the follow-up if that matters.
 - One registry for every agent: any client can push over another's tag
   under `localhost:5050`.
+  *2026-11-24:* both mattered once carman's own images, which its agents
+  start from, moved into this registry; D45 closes them.
 - lima forwards the registry to the Mac's 127.0.0.1:5050, as it does every
   guest listener.
 - An image dropped from the registry stays on the node while `k8s.io` holds
-  the pulled copy; the kubelet's image GC removes unused ones at 95%.
+  the pulled copy; the kubelet's image GC removes unused ones at 80 %. A
+  tag that any workload names is never dropped, so what the kubelet frees
+  comes back by a pull.
 - The pod's side — the hostPath, the supplemental group, a `buildctl` 0.30
   client — is carman's.
 
@@ -1896,16 +1942,290 @@ file beside its flags.
 build caches (25 and 10 GB, above), the `agents` namespace and the registry
 (daily), the services' images (`devvm-services-images`, D39), build records
 (a week and 100 per daemon; unset, the Mac's daemon held 166 records from
-three days, about 5 MB a day), images in `k8s.io` (the kubelet, 95 % to
-90 %), and the cluster's volumes, which nothing bounds: agents' homes and
+three days, about 5 MB a day), images in `k8s.io` (the kubelet, 80 % to
+70 %), old k3s versions' binaries (`k3s-data-prune` at each k3s start,
+about 290 MB a version), and the cluster's volumes, which nothing bounds: agents' homes and
 Postgres grow with use, and `devvm-doctor` warns at 90 %. carman's finished
 jobs expire (its CronJobs keep 5 to 7 runs, its jobs 3 days). On the OS disk:
 the Nix store (weekly, 14 days, and a 5 GiB floor), the journal (journald's
 own 10 % or 4 GB), pod logs (kubelet rotation). Postgres's WAL stays at
 `max_wal_size`, 1 GB: no slots, no archiving. On the Mac: lima's
-`ha.stderr.log`, which the agent writes at debug level whatever it is told,
-four lines per proxied connection, about 15 MB a day for as long as the VM
-runs — `devvm-run` drops the debug lines (40 of 13,276 were anything else,
-and those are the ones DEVVM.md names); truncating the file in place does
-not help, lima writes on at its own offset. The nightly dump replaces
-itself, and the Mac's Nix store is collected as the guest's is.
+`ha.stderr.log`, which the agent opens itself and writes at debug level
+whatever it is told: four lines per proxied connection and one per
+ten-second time sync, 6 to 15 MB a day of VM uptime, most of it
+`devvm-doctor`'s own probes of every forward every 120 s. It starts again
+at each VM start, and while the VM runs `devvm-run` caps it: hourly, past
+64 MiB on disk, the last 16 MiB go to `ha.stderr.log.1` and the file is
+emptied in place. The agent writes on at its old offset, so the file keeps
+its length with a hole in front (read it with `tail` or `grep -a`); APFS
+leaves a hole only for gaps from about 16 MiB and zero-fills smaller ones,
+hence a cap well above that (measured, 2026-11-22). A filter on
+`devvm-run`'s output never sees these lines (tried, reverted). The nightly
+dump replaces itself, and the Mac's Nix store is collected as the guest's
+is.
+
+## D41 — carman's memory is backed up daily into a git repository in ~/code-shared *(2026-11-22; retired 2026-11-25)*
+
+**Temporary.** Backups are carman's to make (D42). This job bridges until
+carman's own nightly job writes to the object store and has passed a
+restore carman has compared; then it and `~/code-shared/cmem-library.git`
+are deleted, not moved.
+
+**Decision.** `cmem-backup` (`modules/home/work.nix`), a launchd agent at
+05:00, fetches the whole memory library, every note with its history, into
+the bare repository `~/code-shared/cmem-library.git`. It takes the library
+with `cmem backup`, as the laptop role, and fetches the bundle only after
+`cmem restore` has made a library of it.
+
+**Why.** Alex: as for Postgres (D39), a daily copy in the shared directory,
+but with history rather than a file replaced, so it can be pulled and pushed.
+The library is a git repository already (carman's DESIGN.md: every write is
+a commit, and "a remote is the backup"), and `cmem backup` hands it over
+whole; fetching that into a repository keeps every day's state for the cost
+of the new objects. carman's RECOVERY.md had no automatic backup.
+
+**Why this shape.**
+- From the Mac, through the service's own export and the token the Mac
+  already holds (D35): nothing changes in carman, nothing reaches into its
+  pod.
+- Bare, with `main` as its head: a remote to clone, pull or push.
+- Proven before it is kept: `cmem restore` must succeed, as carman's own
+  backup script requires.
+- If the library's history was started again (RECOVERY.md's way out of a
+  damaged repository), the fetch is not a fast-forward. The old heads are
+  kept under `refs/before/STAMP/` and the new history is fetched; tested on
+  a copy, with all 331 old commits still reachable.
+- 05:00 local, after the dreamer's 03:17 run.
+
+**Measured.** The first copy, by hand at 10:13 UTC, before that night's
+dreamer: 240 current entries, 331 commits, 904 KB, restored to a library of
+240 entries, `git fsck` clean.
+
+**Known, and left alone.**
+- It needs the laptop token in the login keychain (`keychain-sync`) and the
+  VM up; launchd runs a missed run at wake. A failure is a line in
+  `~/Library/Logs/cmem-backup.log` and nothing more.
+- The copy is on the Mac's disk only. The desk pod mounts `~/code-shared`, so
+  its agents can read the copy, as they can read the memory itself.
+
+*Retired 2026-11-25*, at Alex's word, after carman's own backup had run
+nightly on 2026-11-23 and 24 and passed its compared restore; its newest
+snapshot was from 01:15 UTC that day. The job, its launchd agent, its log
+and `~/code-shared/cmem-library.git` were deleted. The agent was unloaded
+by hand first, since home-manager could not have (D44).
+
+## D42 — This repository is the platform; carman is the agents' system *(2026-11-22)*
+
+**Decision.** Alex: this repository provides the supporting infrastructure
+and his user configuration; carman is concerned with the agentic platform,
+and should deploy on a cloud cluster with the same function, credentials
+apart. So, here: the VM and the cluster, storage (volumes, and the object
+store, D43), the build daemon and registry, the forwards to the Mac,
+keep-awake and restarts, the keychain copies the Mac's sessions read, and
+Alex's shell for interactive sessions (`agent-home`, D38), whose source of
+truth stays here. carman's: everything agents rely on and everything that
+knows what its state means: the memory service, backups and restores, the
+proxy and its sign-ins, sessions, the sandbox, notices.
+
+**The interface is values.** carman is handed addresses, socket paths, a
+group id, an image reference, a bucket, and keeps them in its own local
+values; neither repository reads the other's internals. This repository
+takes carman's flake only for the `cmem` client in Alex's own shell.
+
+**Exceptions, and their end.** Postgres and Redis (D39) stay here as
+special cases; they move to carman once the object store is stable, with
+their dumps. `cmem-backup` (D41) is logic on the wrong side, kept only as a
+bridge.
+
+## D43 — The cluster's object store is versitygw on the Mac *(2026-11-22)*
+
+**Decision.** An S3 endpoint for the cluster, served from the Mac
+(`modules/darwin/objects.nix`, work hosts): versitygw over
+`~/.local/share/devvm-objects`, a launchd user agent on `127.0.0.1:7070`,
+reached from pods at `192.168.5.2:7070`. `devvm-objects-bucket NAME` makes a
+versioned, admin-owned bucket and a key that may read, write, list and
+delete objects, and nothing more; the key's secret is in the login keychain.
+`devvm-objects-expire` removes a replaced version 30 days after its
+replacement. The first bucket is carman's, for its restic backups (D42).
+
+**Why S3.** It is what a cloud gives (S3, or GCS natively or through its S3
+interface), so carman's job differs between the Mac and a cloud by an
+address and a credential. Set aside: volume snapshots (need a
+snapshot-capable CSI driver, and here sit on the disk they protect), a git
+remote (the memory only), a host directory (no cloud equivalent), restic's
+own `rest-server` (append-only, but for restic alone), COSI (alpha).
+
+**Why on the Mac.** Outside the VM's disks and every directory the VM
+mounts: a VM rebuilt from nothing loses nothing, no pod can touch the files,
+and the store is up while the VM is down, when a restore needs it. lima's
+gateway already delivers the cluster's connections to the Mac's loopback
+(checked from a pod).
+
+**Why versitygw** (tried against each, 2026-11-22). One 53 MiB process and
+one port; every object a plain file, readable with the service down; a
+bucket policy that names the key, enforced (refused: deleting a version,
+suspending versioning, changing or deleting the policy, deleting the
+bucket); restic init, backup, prune and check clean; a bucket wiped with
+the key restored by the admin, byte for byte. It has no lifecycle rules,
+hence the expiry job. SeaweedFS 4.36 does have them, but is 196 MiB, nine
+listening ports, its own volume files, and refused a policy naming a key
+(only `"*"` held). MinIO's community edition is archived with unpatched
+CVEs; Garage has no versioning and no macOS build in nixpkgs; RustFS
+reached 1.0 in September 2026 and is not in nixpkgs.
+
+**Shape.**
+- Buckets belong to the admin, never to their key: a key that owns its
+  bucket can delete the policy that limits it (tried).
+- Expiry counts from the replacement, not from the write: by write time a
+  wipe would take a restic repository's old packs at the next run.
+- Secrets reach `security` and curl on stdin, never a command line. The
+  store keeps the buckets' keys in `iam/`, as any S3 server must to check a
+  signature; the directory is 0700.
+- `--fsync`: an acknowledged backup is on disk. `--quiet`: versitygw
+  otherwise logs a line per request, which nothing would bound.
+- `devvm-doctor` reports the store when it does not answer.
+
+**Known.** The store is on this Mac's disk only: Time Machine has no
+destination here, so losing the Mac loses the backups with it. Alex: no copy
+off the Mac for now (2026-11-23).
+
+**Image GC at 80 %** *(2026-11-23)*. The kubelet frees unused images from
+80 % of the state disk to 70 %, down from 95 % to 90 %, which kept a node-only
+image a CronJob runs between its runs but left 6 GB for volumes; at 85 %
+images and build cache held 94 of the disk's 102 GB used, volumes 4.4. The
+high mark could come down once carman's pods named their images in the
+registry (`CARMAN_REGISTRY=localhost:5050`), from which a freed image is
+pulled back, and the registry prune keeps every tag a workload names. An
+image built or pulled on the node only, by nerdctl, goes once no pod runs
+it; `nerdctl pull` again.
+
+## D44 — Launch agents go through nix-darwin until home-manager has the macOS 15 fix *(2026-11-23)*
+
+**Decision.** A new launch agent is declared with nix-darwin's
+`launchd.user.agents`, as the VM, the object store and the Postgres dump
+are, not with home-manager's `launchd.agents`. The one home-manager agent,
+cmem-backup (D41), was reloaded by hand when its plist changed, until it was
+retired on 2026-11-25; none is left.
+
+**Why.** home-manager's release-26.05 stops an agent with
+`launchctl bootout --wait`. launchctl before macOS 26 has no `--wait` and
+answers "Unrecognized target specifier" (measured on 15.8.1). The new plist
+is installed anyway and its bootstrap fails, since the old job is still
+loaded (I/O error 5); the next switch finds the plist current and skips it.
+The old job runs on until logout, from a store path nothing keeps from
+garbage collection. A removed agent goes through the same bootout and then
+loses its plist, so it stays loaded too. Upstream fixed it on master on
+2026-07-02 (#9587: `--wait` on macOS 26 and later only), with no backport
+to 26.05. First seen when a carman bump changed cmem-backup's plist.
+
+**Rejected.** An activation step that does home-manager's reload before it
+does: about thirty lines copied from home-manager, for one temporary agent.
+Patching the input: an import from a derivation at every evaluation.
+
+**By hand.** A changed agent, after the switch:
+`launchctl bootout gui/$UID/org.nix-community.home.NAME`, then
+`launchctl bootstrap gui/$UID ~/Library/LaunchAgents/org.nix-community.home.NAME.plist`.
+A removed one: the bootout alone.
+
+**Revisit when.** The pinned home-manager carries #9587, at the 26.11
+train or by a backport; then home-manager's agents are usable again.
+
+## D45 — An owner's images take its key; agents' builds get a network of their own *(2026-11-24)*
+
+**Decision.** The agents' registry (D40) sits behind nginx, on every address
+at port 5050: `localhost:5050` on the node as before, `10.42.0.1:5050` for
+pods. distribution itself listens on a unix socket only nginx can open.
+Reads are open to all. Writes are open too, except to an owner's
+repositories (`NAME`, `NAME-*`, `NAME/*`, for each name in the guest's
+`devvm.agentBuilds.registryOwners`; today `carman`), which take that owner's
+key. `devvm-registry-key OWNER`, on the Mac, keeps the key in the login
+keychain as `devvm-registry-OWNER` and writes only its hash into the guest
+(`registry-auth/OWNER.htpasswd` on the state disk), both on stdin. The
+agents' BuildKit daemon runs each RUN step on a bridge of its own,
+`10.89.0.0/24`. `agent-builds-network` lets those steps reach the internet
+and lima's DNS, and nothing else: not the node, the pods, the services,
+lima's network (the Mac's loopback is behind its gateway), other private
+ranges, or IPv6 at all.
+
+**Why.** carman's agents start from carman's images in this registry, and
+its scheduled job (`agent-warm`) has to push there from a pod. Measured
+before this change:
+- every agent pod mounts the BuildKit socket, and BuildKit pushed to the
+  registry with no credential, so any agent could replace the image all
+  later agents start from;
+- a RUN step ran in the node's network namespace: it read the registry, got
+  an answer from the Mac's object store, found Postgres open, and had the
+  internet without carman's proxy;
+- network policies take effect a few seconds after a pod starts: a pod in
+  `sandbox` reached the API server, the node and the Mac at start and was
+  blocked 15 s later. A policy cannot be what keeps pods off the registry.
+So the check is in the registry, on every path in, and the builds are taken
+off the node's network, where they could otherwise capture the key in
+transit. Alex's model: a pod carman gives the key to may write carman's
+images; no other pod, inside or outside the VM, can. The key is carman's to
+hand out: a Secret in namespace `carman`, which agents can neither read nor
+start pods in (checked), and `sandbox` enforces baseline pod security, so an
+agent's pod cannot reach the node's files or network. What runs as root on
+the node, or as the cluster's admin, is above all of this: this Mac and Alex.
+
+**Shape.**
+- One location per owner in nginx, `auth_basic` with that owner's file
+  alone under `limit_except GET HEAD`, so only the owner's key passes. Its
+  file starts empty, which refuses every write until a key is installed.
+- A ping (`GET /v2/`) without credentials gets 401 Basic: crane decides
+  from the ping whether to send credentials at all. containerd and BuildKit
+  do not ping, so anonymous pulls and pushes are unchanged.
+- The request reaches distribution as sent: a decoded `$uri` could carry a
+  line break into it (gixy's finding). nginx checks the normalized path, and
+  distribution cleans paths the same way, so a path that differs between
+  the two fails closed.
+- The build filter is in raw PREROUTING, on the bridge's interface, so it
+  sees the address a build asked for before a Service's is translated, and
+  a forged source address does not escape it. Allowed: lima's DNS (port 53
+  on 192.168.5.2). Dropped: 0/8, 10/8, 100.64/10, 127/8, 169.254/16,
+  172.16/12, 192.168/16, 224/3, and all IPv6 from the bridge.
+- Builds reach the internet directly, as builds on the Mac do: Alex's call.
+  BuildKit's own pulls and pushes are the daemon's, on the node's network.
+- nginx logs each write with its user (`journalctl -t registry_writes`).
+  Its own tag: distribution logs every request, reads too, without the user,
+  as `registry`.
+- On the work Macs the `docker` wrapper carries carman's key for
+  `localhost:5050` (`devvm.registryAuth`, D23), read from the keychain per
+  call, so carman's deploy pushes from the Mac without handling the key.
+
+**Rejected.**
+- A network policy keeping `sandbox` off the registry: the start-up window
+  above, and agents push through BuildKit anyway.
+- zot, which has per-repository rules built in: not in nixpkgs.
+- distribution's own htpasswd: all or nothing, so the node's pulls and the
+  agents' own builds would need a key too.
+- Builds through carman's proxy: Alex preferred direct, like the Mac's.
+
+**Measured** on a throwaway registry and nginx from the generated configs,
+with a throwaway key:
+- crane and BuildKit pushed to `carman-agent` and `carman/x` with the key
+  and were refused without it or with a wrong one; a delete was refused
+  without it; reads, writes to other repositories, and k3s's containerd's
+  pull needed none.
+- `..`, `%2F`, `%2D` and doubled slashes in a raw path all got 401; an
+  encoded line break got 404 and changed nothing.
+
+On a throwaway BuildKit daemon in the same bridge mode, behind the generated
+filter, a RUN step:
+- resolved names and fetched from the internet;
+- could not reach lima's gateway beyond DNS, the node, the pods' gateway,
+  the API server's service, Postgres, Redis or its own bridge's gateway;
+- got no IPv6 answer from the node.
+
+**Known, and left alone.**
+- The key crosses the node in plain HTTP. Only root on the node can see it
+  there now.
+- Any agent can still push over another agent's tag outside an owner's
+  repositories, as in D40.
+- A guest from before D45, or a new state disk, has no key hashes:
+  `devvm-registry-key OWNER` puts the same key back.
+
+**Revisit when.** Another owner needs repositories of its own (add it to
+`registryOwners`, then run the key command), or carman moves to a cloud
+cluster, where the registry is the provider's and the key is a workload
+identity.

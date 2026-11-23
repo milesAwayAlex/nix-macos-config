@@ -31,6 +31,19 @@ let
     '';
   };
 
+  # carman's key to the dev VM's registry (D45), from the item
+  # devvm-registry-key keeps, so carman's deploy pushes through `docker`.
+  # No expiry, so the wrappers never write it down.
+  registryPort = config.devvm.guest.config.devvm.agentBuilds.registryPort;
+  carmanRegistryCredential = pkgs.writeShellApplication {
+    name = "carman-registry-credential";
+    runtimeInputs = [ pkgs.jq ];
+    text = ''
+      /usr/bin/security find-generic-password -s devvm-registry-carman -a "$USER" -w |
+        jq -Rc '{Username: "carman", Secret: .}'
+    '';
+  };
+
   # The CA bundle the employer's endpoint scanner builds for nix and keeps
   # current: the stock roots, the machine's, and its own.
   scannerCaBundle = "/Library/Application Support/AikidoSecurity/EndpointProtection/run/endpoint-protection-nix-combined-ca.pem";
@@ -124,5 +137,9 @@ in
     # never stored in the guest (D23). gcr.io is the one work uses today, and
     # an Artifact Registry host would take the same command.
     registryAuth."gcr.io" = lib.getExe gcloudRegistryCredential;
+    registryAuth."localhost:${toString registryPort}" = lib.getExe carmanRegistryCredential;
+
+    # The cluster's backups (D43), on this Mac rather than in the VM.
+    objects.enable = true;
   };
 }

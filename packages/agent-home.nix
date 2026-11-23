@@ -5,18 +5,24 @@
   home,
   coreutils,
   findutils,
+  jq,
   runCommand,
   writeShellApplication,
+  writeText,
 }:
 let
   inherit (home.config) home-files;
   profile = home.config.home.path;
+  claudeSettings = writeText "claude-settings.json" (
+    builtins.toJSON home.config.agentHome.claudeSettings
+  );
 
   link = writeShellApplication {
     name = "agent-home-link";
     runtimeInputs = [
       coreutils
       findutils
+      jq
     ];
     text = ''
       state="$HOME/.local/state/agent-home"
@@ -43,6 +49,20 @@ let
         done
       fi
       mv "$state/links.new" "$state/links"
+
+      # Alex's Claude Code preferences over the settings file's own keys. A
+      # real file, not a link: carman's start and the harness write it too.
+      settings="$HOME/.claude/settings.json"
+      mkdir -p "$HOME/.claude"
+      current=/dev/null
+      if [ -s "$settings" ]; then current=$settings; fi
+      if jq -n --slurpfile set ${claudeSettings} '([inputs][0] // {}) * $set[0]' \
+        "$current" >"$settings.new"; then
+        mv "$settings.new" "$settings"
+      else
+        rm -f "$settings.new"
+        echo "agent-home-link: $settings is not JSON; left as it is" >&2
+      fi
     '';
   };
 in

@@ -6,10 +6,18 @@
   imports = [
     ./bash
     ./git.nix
+    ./glow.nix
     ./gnu.nix
     ./pkgs.nix
     ./tmux.nix
     ./vim
+    {
+      options.agentHome.claudeSettings = lib.mkOption {
+        type = lib.types.attrsOf lib.types.anything;
+        default = { };
+        description = "Keys agent-home-link sets in ~/.claude/settings.json at each start.";
+      };
+    }
   ];
 
   # The pod's user. Its home is a volume, so these files reach it at the
@@ -55,6 +63,13 @@
     set -g status-left-length 40
     set -g status-left "#[fg=brightmagenta]#h#[default] [#S] #{?client_prefix,* ,}"
   '';
+
+  # Alex's Claude Code preferences, as on the Mac. Set at each start over
+  # whatever the file holds; its other keys are carman's and the harness's.
+  agentHome.claudeSettings = {
+    editorMode = "vim";
+    theme = "dark-ansi";
+  };
 
   # One locale, not glibc's 220 MiB of them; C.UTF-8 is built into glibc.
   i18n.glibcLocales = pkgs.glibcLocales.override {

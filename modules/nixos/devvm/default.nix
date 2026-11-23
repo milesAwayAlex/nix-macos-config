@@ -510,13 +510,13 @@ in
         images = [ config.services.k3s.package.airgap-images ];
 
         extraFlags = [
-          # The kubelet frees images it considers unused above the high
-          # threshold, and it counts only CRI-managed containers as users — so
-          # an image built here that no pod happens to be running is eligible.
-          # This is the same content store nerdctl builds into (D23), so the
-          # defaults of 85/80 are too eager to be left alone.
-          "--kubelet-arg=image-gc-high-threshold=95"
-          "--kubelet-arg=image-gc-low-threshold=90"
+          # The kubelet frees images no container uses, oldest first, from 80 %
+          # of the state disk down to 70 %, which keeps a quarter of it for the
+          # cluster's volumes (D40). Pods name images in the registry, which
+          # pulls them back; an image built or pulled here only, by nerdctl,
+          # goes too once no pod runs it.
+          "--kubelet-arg=image-gc-high-threshold=80"
+          "--kubelet-arg=image-gc-low-threshold=70"
         ];
       };
 
@@ -550,6 +550,26 @@ in
           sed 's/: default$/: ${config.networking.hostName}/' /etc/rancher/k3s/k3s.yaml > ${cfg.cluster.kubeconfig}.tmp
           chmod 0644 ${cfg.cluster.kubeconfig}.tmp
           mv ${cfg.cluster.kubeconfig}.tmp ${cfg.cluster.kubeconfig}
+        '';
+      };
+
+      # k3s unpacks its binaries under data/<hash> for each version it runs
+      # and never removes the old ones, about 290 MB each.
+      systemd.services.k3s-data-prune = {
+        description = "Remove the binaries of k3s versions no longer run";
+        wantedBy = [ "k3s.service" ];
+        after = [ "k3s.service" ];
+        serviceConfig.Type = "oneshot";
+        script = ''
+          data=/var/lib/rancher/k3s/data
+          current=$(readlink -f "$data/current")
+          [ -d "$current" ] || exit 0
+          for dir in "$data"/*; do
+            case "$dir" in
+              "$data/current" | "$data/previous" | "$data/cni" | "$current") ;;
+              *) [ -L "$dir" ] || rm -rf "$dir" ;;
+            esac
+          done
         '';
       };
 

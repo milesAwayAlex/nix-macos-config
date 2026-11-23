@@ -207,7 +207,9 @@ let
   # prefix on the ssh command line, so that variable is held back from the
   # forwarding and sent through ssh's own SendEnv instead — lima takes the ssh
   # command line from `$SSH` — which keeps it off every process list on the
-  # way; the guest's sshd accepts exactly this name.
+  # way; the guest's sshd accepts exactly this name. The call takes its own
+  # connection: a session on lima's shared one gets only the variables that
+  # connection was opened with, so the credentials would not arrive.
   #
   # Identity: `docker -v` answers as nerdctl, and that is load-bearing. kind's
   # provider detection reads that first line, takes docker only when it says
@@ -221,7 +223,7 @@ let
       export LIMA_SHELLENV_BLOCK="+LC_*,LANG,LANGUAGE"
       ${lib.optionalString (cfg.registryAuth != { }) ''
         ${authEnv}=$(${devvm-registry-auth}/bin/devvm-registry-auth)
-        export ${authEnv} SSH="ssh -o SendEnv=${authEnv}" LIMA_SHELLENV_BLOCK="$LIMA_SHELLENV_BLOCK,SSH,${authEnv}"
+        export ${authEnv} SSH="ssh -o SendEnv=${authEnv} -o ControlPath=none" LIMA_SHELLENV_BLOCK="$LIMA_SHELLENV_BLOCK,SSH,${authEnv}"
       ''}
       workdir=/var/empty
       ${lib.optionalString (cfg.mount != null) ''
@@ -237,9 +239,22 @@ let
     name = "devvm-run";
     runtimeInputs = [
       cfg.package
-      pkgs.gnugrep
+      pkgs.coreutils
+      pkgs.perl
     ];
     text = ''
+      ${lib.optionalString cfg.keepAwake ''
+        # No system sleep on AC power while this process lives, which after
+        # the exec below is the host agent, and for two minutes after it (D37):
+        # a closed Mac otherwise sleeps the moment one run ends, before the
+        # next can start (launchd waits 30 s after a crash). First, before
+        # anything that can take time; in a session of its own, which
+        # launchd's kill of the job's process group does not reach. On
+        # battery it holds nothing.
+        # shellcheck disable=SC2016
+        perl -MPOSIX -e 'setsid; exec @ARGV' /bin/sh -c \
+          '/usr/bin/caffeinate -s -w "$1"; /usr/bin/caffeinate -s -t 120' sh $$ &
+      ''}
       # Nothing to keep without an instance, and `limactl start` would make
       # one from lima's default template. One started by hand is left alone.
       # Both are clean exits, which launchd does not answer.
@@ -247,18 +262,22 @@ let
       if [ -z "$status" ] || [ "$status" = Running ]; then
         exit 0
       fi
-      ${lib.optionalString cfg.keepAwake ''
-        # No system sleep on AC power while this process lives, which after
-        # the exec below is the host agent (D37). On battery it holds nothing.
-        /usr/bin/caffeinate -s -w $$ &
-      ''}
+      # The agent's log grows for as long as the VM runs (D40). Hourly, past
+      # 64 MiB on disk, its last 16 MiB go to ha.stderr.log.1 and it is
+      # emptied in place: the agent writes on at its offset, past a hole (APFS
+      # zero-fills a gap under about 16 MiB instead).
+      log="$HOME/.lima/${name}/ha.stderr.log"
+      while sleep 3600 && kill -0 $$ 2>/dev/null; do
+        if [ "$(du -k "$log" | cut -f1)" -gt 65536 ]; then
+          tail -c 16M "$log" | tr -d '\0' >"$log.1"
+          : >"$log"
+          echo "devvm-run: $(date '+%F %T') trimmed $log"
+        fi
+      done &
       # The files lima itself writes when it starts the agent detached, so
-      # the logs are where DEVVM.md says, whoever started the VM. Less the
-      # agent's debug lines, written at any log level: four per proxied
-      # connection, about 15 MB a day for as long as the VM runs.
+      # the logs are where DEVVM.md says, whoever started the VM.
       exec limactl start --foreground --tty=false ${name} \
-        >"$HOME/.lima/${name}/ha.stdout.log" \
-        2> >(grep --line-buffered -v '"level":"debug"' >"$HOME/.lima/${name}/ha.stderr.log")
+        >"$HOME/.lima/${name}/ha.stdout.log" 2>"$HOME/.lima/${name}/ha.stderr.log"
     '';
   };
 
@@ -284,11 +303,44 @@ let
     '';
   };
 
+  # An owner's registry key (D45): kept in the login keychain, its hash
+  # written into the guest, where nginx checks writes to the owner's
+  # repositories against it. Run again to put the same key back, after the
+  # guest's state disk is new.
+  registry = roles.agentBuilds;
+  devvm-registry-key = pkgs.writeShellApplication {
+    name = "devvm-registry-key";
+    runtimeInputs = [
+      cfg.package
+      pkgs.coreutils
+      pkgs.openssl
+    ];
+    text = import ./keychain-secret.nix + ''
+      owners=${lib.escapeShellArg (lib.concatStringsSep " " registry.registryOwners)}
+      owner=''${1:-}
+      if ! [[ $owner =~ ^[a-z0-9]+$ && " $owners " == *" $owner "* ]]; then
+        echo "usage: devvm-registry-key OWNER, one of the guest's registryOwners: $owners" >&2
+        exit 64
+      fi
+      item=devvm-registry-$owner
+      key=$(keychain_secret "$item")
+      file=${roles.stateDir}/registry-auth/$owner.htpasswd
+      # The hash goes to the guest, on stdin, as the key reached openssl.
+      { printf '%s:' "$owner"; printf '%s\n' "$key" | openssl passwd -6 -stdin; } |
+        limactl shell ${name} sudo sh -c \
+          "umask 027 && cat >$file.tmp && chgrp nginx $file.tmp && mv $file.tmp $file"
+      echo "registry key $owner: writes to $owner, $owner-* and $owner/* need it"
+      echo "  registry: 10.42.0.1:${toString registry.registryPort} from the cluster's pods, localhost:${toString registry.registryPort} on the node; plain HTTP"
+      echo "  user $owner; secret: security find-generic-password -s $item -a \"\$USER\" -w"
+    '';
+  };
+
   devvm-doctor = pkgs.writeShellApplication {
     name = "devvm-doctor";
     runtimeInputs = [
       cfg.package
       pkgs.coreutils
+      pkgs.curl
       pkgs.gnused
       pkgs.gawk
       pkgs.jq
@@ -499,7 +551,7 @@ let
                 "just devvm-rebuild, limactl restart $name (DEVVM.md, When it breaks)"
             else
               fault "port-$port" "service $svc: port $port is not forwarded to the Mac" \
-                "look for $port in ~/.lima/$name/ha.stderr.log"
+                "grep -a $port ~/.lima/$name/ha.stderr.log"
             fi
           done < <(jq -r '.items[] | . as $s
             | select(.spec.type == "LoadBalancer" or .spec.type == "NodePort")
@@ -525,6 +577,13 @@ let
       }
 
       examine
+      ${lib.optionalString cfg.objects.enable ''
+        # Not the VM's, but the cluster's backups go there (D43).
+        if [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:${toString cfg.objects.port}/)" != 403 ]; then
+          fault objects "the object store does not answer on 127.0.0.1:${toString cfg.objects.port}" \
+            "launchctl kickstart -k gui/$UID/org.nixos.devvm-objects; its log is ~/Library/Logs/devvm-objects.log"
+        fi
+      ''}
       if [ -z "$notify" ]; then
         report
         [ ''${#faults[@]} -eq 0 ]
@@ -978,6 +1037,10 @@ in
           pkgs.redis
         ];
         environment.variables.PGHOST = "127.0.0.1";
+      })
+
+      (lib.mkIf (roles.agentBuilds.enable && roles.agentBuilds.registryOwners != [ ]) {
+        environment.systemPackages = [ devvm-registry-key ];
       })
 
       (lib.mkIf (roles.services.enable && cfg.mount != null) {
