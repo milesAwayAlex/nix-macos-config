@@ -32,6 +32,20 @@ let
     # service is on the dev VM, so the VM's own check is the place to look.
     unreachableHint = "Run `devvm-doctor` to see what is wrong with the dev VM that serves it, and the cure.";
   };
+  # carman's messaging (D46): this Mac's sessions as its place `host`, with
+  # the host token's keychain copy. Without the token the hooks do nothing.
+  dispatcherSettings = pkgs.carman.dispatcher-claude-code-settings;
+  dispatcherTokenItem = "dispatcher-host-token";
+  # `claude --settings` takes one file: hook lists joined per event, allow
+  # lists appended, the rest merged.
+  claudeSettings =
+    pkgs.runCommand "claude-code-settings.json" { nativeBuildInputs = [ pkgs.jq ]; }
+      ''
+        jq -s '.[0] as $a | .[1] as $b | $a * $b
+          | .hooks = reduce (($a.hooks, $b.hooks) | to_entries[]) as $e ({}; .[$e.key] += $e.value)
+          | .permissions.allow = ($a.permissions.allow // []) + ($b.permissions.allow // [])' \
+          ${cmemSettings} ${dispatcherSettings} > $out
+      '';
 
   # The agent pod's tmux, attached from this terminal (D38). carman's deploy
   # script, from its checkout, knows the pod and how to attach.
@@ -93,8 +107,9 @@ let
   # tokens that sessions and unattended runs read without a prompt.
   keychainCopies = {
     # Inference only (`claude setup-token`), for test runs. Not for sessions.
-    claude-test-token = "op://Private/Sparelabs Claude API Key/credential";
+    claude-test-token = "op://Employee/Personal Claude API Key/credential";
     ${cmemTokenItem} = "op://Private/carman cmem/laptop";
+    ${dispatcherTokenItem} = "op://Private/carman dispatcher/host";
   };
   readKeychain =
     service: ''/usr/bin/security find-generic-password -s ${service} -a "$USER" -w 2>/dev/null'';
@@ -136,6 +151,8 @@ in
     # modules/darwin/work.nix. On PATH because an agent runs `cmem note` and
     # `cmem recall` by name; the hooks do not need it there.
     carman.cmem
+    # Messaging's client: an agent runs `dispatcher send` and the rest by name.
+    carman.dispatcher
     keychainSync
     desk
   ];
@@ -145,6 +162,8 @@ in
   # status and prefix are off, so the bar is the pod's; C-Space there opens
   # deskprefix, where the session keys act here and the rest go to the pod
   # as prefix+key. set-clipboard on passes the pod's copies out.
+  # Only the default server makes it: a second desk (a `tmux -L` server reads
+  # this file too) attaches as the same place, and each takes the other's client.
   programs.tmux.extraConfig = lib.mkAfter ''
     set -g set-clipboard on
     bind -T desk C-Space switch-client -T deskprefix
@@ -156,11 +175,13 @@ in
     ${lib.concatMapStrings (key: ''
       bind -T deskprefix ${tmuxKey key} send-keys C-Space ${tmuxKey key}
     '') deskForwardedKeys}
+    %if "#{==:#{b:socket_path},default}"
     new-session -d -s desk ${deskLoop}
     set -t desk status off
     set -t desk prefix None
     set -t desk prefix2 None
     set -t desk key-table desk
+    %endif
   '';
 
   # 1Password is this machine's ssh agent. Two things about the line itself:
@@ -184,8 +205,9 @@ in
   # tmux names the window after it. `env` because the native installer owns
   # the binary (D13); mkBefore keeps the ~/.bashrc.local hook last.
   #
-  # It gives a session carman's memory (D33): hooks through `--settings`,
-  # the token from the keychain (D35). No token, and the hook says so.
+  # It gives a session carman's memory (D33) and messaging (D46): hooks
+  # through `--settings`, the tokens from the keychain (D35). No memory
+  # token, and its hook says so; no messaging token, and that hook is silent.
   #
   # git and gh are told not to prompt: nobody is at a session's terminal.
   #
@@ -193,10 +215,12 @@ in
   # wins, which is how a trial service is aimed at.
   programs.bash.initExtra = lib.mkBefore ''
     claude() {
-      local cmem_token
+      local cmem_token dispatcher_token
       cmem_token=$(${readKeychain cmemTokenItem})
-      CMEM_TOKEN=$cmem_token env GIT_TERMINAL_PROMPT=0 GH_PROMPT_DISABLED=1 \
-        claude --settings ${cmemSettings} "$@"
+      dispatcher_token=$(${readKeychain dispatcherTokenItem})
+      CMEM_TOKEN=$cmem_token DISPATCHER_TOKEN=$dispatcher_token \
+        env GIT_TERMINAL_PROMPT=0 GH_PROMPT_DISABLED=1 \
+        claude --settings ${claudeSettings} "$@"
     }
 
     cmem() {

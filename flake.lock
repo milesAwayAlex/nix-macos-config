@@ -3,16 +3,16 @@
     "brew-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1793000687,
-        "narHash": "sha256-8mCor0DDjNhi+0e+FllfqiMABujBl+/RxYW+wgMpcto=",
+        "lastModified": 1795051546,
+        "narHash": "sha256-8qp8StbMuOtXNqnfLa2ABjB+pIdHJBax5LJCs2eMhKQ=",
         "owner": "Homebrew",
         "repo": "brew",
-        "rev": "c6069d2a943b71b0a90d91fc1ac93cb9c1634dcc",
+        "rev": "3e47189a707c739ee1278a28a3b845f5834574e6",
         "type": "github"
       },
       "original": {
         "owner": "Homebrew",
-        "ref": "7.0.11",
+        "ref": "7.0.15",
         "repo": "brew",
         "type": "github"
       }
@@ -24,11 +24,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1795721531,
-        "narHash": "sha256-aAeOaMBRxT+rGeTXNHk6k2TuvEM5MCXSAXiH9B2V3dU=",
+        "lastModified": 1795762636,
+        "narHash": "sha256-l98SG7Fg/n/3FuwLBJgWKRNagTRCqhy1U5Wiy2UtYos=",
         "owner": "milesAwayAlex",
         "repo": "carman",
-        "rev": "1f2c617a86afd6c00bd28c8992c0c89a03b58a7f",
+        "rev": "e64828420bb06405ab487cc81481596cafb90f94",
         "type": "github"
       },
       "original": {
@@ -84,11 +84,11 @@
         "brew-src": "brew-src"
       },
       "locked": {
-        "lastModified": 1793543863,
-        "narHash": "sha256-oDYLVD8KGT/M57c8HziYSSj0le4wCyA+jZ7+/qUS91M=",
+        "lastModified": 1795755327,
+        "narHash": "sha256-qpfNQ5tFivEE9t7CsQcir3FTCr6zYji53YS9pm3AzyA=",
         "owner": "zhaofengli",
         "repo": "nix-homebrew",
-        "rev": "52bc87da3f30c2261a6d1cfef3c892097b53daeb",
+        "rev": "b279e781fbfede43b2b20e7278cf3c5312ca3301",
         "type": "github"
       },
       "original": {
@@ -145,11 +145,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1795123709,
-        "narHash": "sha256-GFszns+Oz5wnpWBFqBZT3aCImQXBvfOjp3yD+lFtKtw=",
+        "lastModified": 1795732247,
+        "narHash": "sha256-QDGqVRU0944bwqnA36o57Xzyog7TXP3fK82hRjEhRAU=",
         "owner": "nixos-lima",
         "repo": "nixos-lima",
-        "rev": "b3e4a607f93571aa8b4384097bca7494d73f9da9",
+        "rev": "990dd1a9293a5cf732b1be850f5509dc1bb4d0c8",
         "type": "github"
       },
       "original": {

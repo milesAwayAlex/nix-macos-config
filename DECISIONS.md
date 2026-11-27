@@ -1532,6 +1532,14 @@ that is a new decision, not a new line; a run needs a token inside the
 cluster at rest (the in-cluster design with carman); or 1Password offers an
 approval that survives a lock for named items, which would let the copy go.
 
+*2026-11-26:* a third item, `dispatcher-host-token`, the messaging token of
+D46. It is the same class: the kubeconfig on disk reads it from the
+cluster's `dispatcher-tokens` Secret.
+
+*2026-11-27:* `claude-test-token` is copied from `op://Employee/Personal
+Claude API Key/credential` instead of the Sparelabs record, by Alex's
+choice. Neither 1Password item was changed.
+
 ## D36 — The dev VM is kept up by launchd and checked by a doctor that repairs nothing *(2026-11-19)*
 
 **Decision.** Three things, all in `modules/darwin/devvm.nix`, on every host
@@ -1793,6 +1801,16 @@ takes Alex's preferences. Both were Alex's reports; carman found the causes.
   the pod lasts until the next start. The Mac's file stays the harness's
   (D13), so a preference changed there reaches the pod by an edit here.
   Model and effort are carman's choice, not the shell's, and are not set.
+
+*2026-11-26:* only the default tmux server makes `desk`
+(`%if "#{==:#{b:socket_path},default}"`). A server on its own socket
+(`tmux -L NAME`, as carman's host-session trial started) reads the same
+configuration, so it made a second `desk`. Both attached from the same place
+(`HOST:tmux:desk:0.0`), and the pod's attach hangs up the earlier client from
+that place. Each loop took the other's client, and Alex saw `[lost tty]` and
+the retry line about every 10 seconds. A `-L` server now has no `desk`.
+Tested on tmux 3.7b with scratch servers on sockets named `default` and
+`trial`.
 
 ## D39 — Postgres and Redis run in the dev VM's cluster *(2026-11-22)*
 
@@ -2229,3 +2247,60 @@ filter, a RUN step:
 `registryOwners`, then run the key command), or carman moves to a cloud
 cluster, where the registry is the provider's and the key is a workload
 identity.
+
+## D46 — The Mac's sessions are a place in carman's messaging *(2026-11-26)*
+
+**Decision.** A session started through the shell's `claude` function is a
+session of carman's messaging place `host` (carman ADR 0049). carman's
+agents see it as `host/DIRECTORY`. It can write to any agent and start an
+agent's run, and answers reach it between tool calls, or by waking it when
+it is idle. It is installed the way the memory is (D33), as Alex asked
+("can we treat it similar to cmem? it's a hook into carman from the local
+session, possibly temporary"):
+- carman's flake exports the hooks as `dispatcher-claude-code-settings`,
+  calling the binary by its store path. `modules/home/work.nix` merges
+  them with the memory's into the one file `claude --settings` takes. The
+  binary is on PATH too, because an agent runs it by name.
+- The service is the dispatcher's LoadBalancer at 127.0.0.1:8379,
+  forwarded like the memory's 8377. Nothing in the VM changed.
+- The allow-list carman ships (`dispatcher send`, `reply`, `peers` and the
+  rest) is in, by Alex's choice, so sessions message agents and start their
+  runs without a prompt.
+- The host token is a keychain copy, `dispatcher-host-token`, of
+  `op://Private/carman dispatcher/host` (D35). Without it the hooks do
+  nothing and say nothing.
+- A `claude -p` run gets no idle listener. Before carman's 871b86d, a
+  `claude -p` run with the hooks on (Claude Code 2.1.326) had not exited
+  after 90 s, held by the listener; with the hooks off it took 5 s. The
+  hook now reads the harness's own sign of an unattended run
+  (`CLAUDE_CODE_SESSION_ATTENDED=0`, entry point `sdk-cli`), so the wrapper
+  does nothing for it.
+
+**Who can write to a session here.** An agent may write to one only to
+answer it: `dispatcher.host.writtenBy` is empty. A message marked as the
+owner's is presented to the session as Alex's own word. The owner token is
+in the dispatcher's pod and its Secret. On 2026-11-26 no service account in
+`carman`, `sandbox` or `services` could read that Secret, exec into a pod
+or create one.
+
+**Known.**
+- All of the Mac's sessions share one token, so the dispatcher does not
+  check which session a caller is (ADR 0049).
+- The idle listener lasts 14 days (23 hours before carman's bbb5f2c). A
+  session idle for longer gets its messages at its next turn.
+- `DISPATCHER_HOOK=off` or `CMEM_HOOK=off` keeps one session out. To take
+  messaging out, drop `dispatcherSettings` from the merge.
+
+**Revisit when.** carman's builder agent gets rights over the installation's
+namespace (approved, not yet built). It could then read the owner token and
+send to these sessions as Alex. Also revisit when a second machine joins the
+place, since it would share the token and the session names.
+
+*2026-11-26:* Alex decided that the owner's key stays off the cluster. carman
+takes it out of the dispatcher's Secret and pod before the builder gets
+rights over the namespace, so no pod can send as Alex.
+
+*2026-11-27:* done in carman's bbb5f2c, which is deployed. The dispatcher
+keeps only the token's SHA-256, and the token is in carman's
+`.local/dispatcher-owner.token` on the Mac. The host token kept its value.
+Pinned at e648284.
