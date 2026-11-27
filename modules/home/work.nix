@@ -106,8 +106,10 @@ let
   # Keychain copies of 1Password items, service name to reference (D35):
   # tokens that sessions and unattended runs read without a prompt.
   keychainCopies = {
-    # Inference only (`claude setup-token`), for test runs. Not for sessions.
-    claude-test-token = "op://Employee/Personal Claude API Key/credential";
+    # Claude tokens (`claude setup-token`), one per account, for test runs and
+    # carman's egress proxy; carman picks which feeds the proxy. Not for sessions.
+    claude-token-account-a = "op://Private/Sparelabs Claude API Key/credential";
+    claude-token-account-b = "op://Employee/Personal Claude API Key/credential";
     ${cmemTokenItem} = "op://Private/carman cmem/laptop";
     ${dispatcherTokenItem} = "op://Private/carman dispatcher/host";
   };

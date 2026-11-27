@@ -1536,9 +1536,15 @@ approval that survives a lock for named items, which would let the copy go.
 D46. It is the same class: the kubeconfig on disk reads it from the
 cluster's `dispatcher-tokens` Secret.
 
-*2026-11-27:* `claude-test-token` is copied from `op://Employee/Personal
-Claude API Key/credential` instead of the Sparelabs record, by Alex's
-choice. Neither 1Password item was changed.
+*2026-11-27:* the Claude token is now two items, one per account, in place of
+`claude-test-token`: `claude-token-account-a` (the Sparelabs record) and
+`claude-token-account-b` (`op://Employee/Personal Claude API Key`). Alex's
+choice, so either account is one keychain read away. They also feed carman's
+egress proxy, and switching between them is carman's job. carman pipes the
+chosen item into the cluster's `model-credential` Secret and restarts the
+proxy, so one of them is in the cluster at rest, by choice. This repository
+keeps both copies refreshed and never touches the proxy. Neither 1Password
+item was changed.
 
 ## D36 — The dev VM is kept up by launchd and checked by a doctor that repairs nothing *(2026-11-19)*
 
@@ -2247,6 +2253,19 @@ filter, a RUN step:
 `registryOwners`, then run the key command), or carman moves to a cloud
 cluster, where the registry is the provider's and the key is a workload
 identity.
+
+*2026-11-27:* RUN steps use a resolver of their own, CoreDNS on the bridge's
+gateway (`agent-builds-dns`, `10.89.0.1:53`), in place of lima's DNS, which
+they can no longer reach. It forwards to lima and answers AAAA with nothing.
+lima's resolver returns IPv4 only and answers every AAAA query with
+SERVFAIL, even for a name with no IPv6. musl then fails the whole lookup,
+so `apk add` in an Alpine RUN step failed while A records resolved. carman's
+platform agent found it. The cluster's CoreDNS gets the same rule through
+`coredns-custom`, for musl pods. A running CoreDNS does not reload an
+imported file, so a change to it takes `kubectl -n kube-system rollout
+restart deploy/coredns`. Rejected: lima's `hostResolver.ipv6`. lima
+says IPv6 needs a vmnet interface, which this instance does not have, and
+the change needs a VM restart.
 
 ## D46 — The Mac's sessions are a place in carman's messaging *(2026-11-26)*
 

@@ -27,6 +27,21 @@ let
   authDir = "${stateDir}/registry-auth";
   # Linux caps an interface name at 15 characters.
   buildBridge = "buildkit-agents";
+  # The bridge's own address: the CNI gateway, and where the builds' resolver listens.
+  buildGateway = lib.removeSuffix "0/24" cfg.buildSubnet + "1";
+  # lima's resolver fails every AAAA query, which fails musl's whole lookup
+  # (Alpine's apk); the builds have no IPv6, so AAAA is answered with nothing.
+  buildsCorefile = pkgs.writeText "Corefile-agent-builds" ''
+    .:53 {
+        bind ${buildGateway}
+        errors
+        template IN AAAA . {
+            rcode NOERROR
+        }
+        forward . 192.168.5.2
+        cache 30
+    }
+  '';
 
   buildkitdConfig = (pkgs.formats.toml { }).generate "buildkitd-agents.toml" {
     # On the state disk, where the layers are: minFreeSpace is measured on
@@ -62,6 +77,7 @@ let
       ];
     };
     registry.${registry}.http = true;
+    dns.nameservers = [ buildGateway ];
   };
 in
 {
@@ -94,6 +110,10 @@ in
         assertion = config.devvm.cluster.enable;
         message = "devvm.agentBuilds needs devvm.cluster";
       }
+      {
+        assertion = builtins.match "([0-9]+\\.){3}0/24" cfg.buildSubnet != null;
+        message = "devvm.agentBuilds.buildSubnet must be a /24 ending in .0/24";
+      }
     ];
 
     users.groups.agent-builds.gid = cfg.gid;
@@ -107,9 +127,11 @@ in
         "k3s.service"
         "agent-builds-network.service"
       ];
+      wants = [ "agent-builds-dns.service" ];
       after = [
         "k3s.service"
         "agent-builds-network.service"
+        "agent-builds-dns.service"
       ];
       # The bridge plugin sets up masquerading with iptables.
       path = [ pkgs.iptables ];
@@ -122,9 +144,9 @@ in
       };
     };
 
-    # A RUN step reaches the internet and lima's DNS, nothing else (D45).
-    # raw sees the address asked for, before a Service's is translated; the
-    # interface, unlike a source address, cannot be forged.
+    # A RUN step reaches the internet and its resolver on the gateway, nothing
+    # else (D45). raw sees the address asked for, before a Service's is
+    # translated; the interface, unlike a source address, cannot be forged.
     systemd.services.agent-builds-network = {
       description = "Keep the agents' builds off the node and private networks";
       wantedBy = [ "multi-user.target" ];
@@ -132,11 +154,20 @@ in
         Type = "oneshot";
         RemainAfterExit = true;
       };
-      path = [ pkgs.iptables ];
+      path = [
+        pkgs.iproute2
+        pkgs.iptables
+      ];
       script = ''
+        # The bridge exists before the first RUN step makes it, so the
+        # resolver can listen on it from boot. CNI takes it as it finds it.
+        ip link show ${buildBridge} >/dev/null 2>&1 || ip link add name ${buildBridge} type bridge
+        ip addr replace ${buildGateway}/24 dev ${buildBridge}
+        ip link set ${buildBridge} up
+
         iptables -w -t raw -N AGENT-BUILDS 2>/dev/null || iptables -w -t raw -F AGENT-BUILDS
         for proto in udp tcp; do
-          iptables -w -t raw -A AGENT-BUILDS -d 192.168.5.2 -p "$proto" --dport 53 -j RETURN
+          iptables -w -t raw -A AGENT-BUILDS -d ${buildGateway} -p "$proto" --dport 53 -j RETURN
         done
         for net in 0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 \
           172.16.0.0/12 192.168.0.0/16 224.0.0.0/3; do
@@ -148,6 +179,23 @@ in
         ip6tables -w -t raw -C PREROUTING -i ${buildBridge} -j DROP 2>/dev/null ||
           ip6tables -w -t raw -I PREROUTING -i ${buildBridge} -j DROP
       '';
+    };
+
+    # The builds' resolver: lima's, but with AAAA answered empty.
+    systemd.services.agent-builds-dns = {
+      description = "DNS for the agents' builds";
+      wantedBy = [ "multi-user.target" ];
+      requires = [ "agent-builds-network.service" ];
+      after = [ "agent-builds-network.service" ];
+      serviceConfig = {
+        ExecStart = "${pkgs.coredns}/bin/coredns -conf ${buildsCorefile}";
+        DynamicUser = true;
+        AmbientCapabilities = [ "CAP_NET_BIND_SERVICE" ];
+        CapabilityBoundingSet = [ "CAP_NET_BIND_SERVICE" ];
+        NoNewPrivileges = true;
+        Restart = "always";
+        RestartSec = "5s";
+      };
     };
 
     # distribution on a socket only nginx can open; nginx on every address,

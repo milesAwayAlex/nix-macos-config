@@ -518,6 +518,22 @@ in
           "--kubelet-arg=image-gc-high-threshold=80"
           "--kubelet-arg=image-gc-low-threshold=70"
         ];
+
+        # lima's resolver fails every AAAA query, and musl then fails the whole
+        # lookup. The cluster has no IPv6, so CoreDNS answers AAAA with nothing.
+        manifests.coredns-custom.content = {
+          apiVersion = "v1";
+          kind = "ConfigMap";
+          metadata = {
+            name = "coredns-custom";
+            namespace = "kube-system";
+          };
+          data."no-aaaa.override" = ''
+            template IN AAAA . {
+                rcode NOERROR
+            }
+          '';
+        };
       };
 
       # lima forwards the ports something listens on, and a NodePort or a

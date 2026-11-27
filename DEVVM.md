@@ -241,8 +241,9 @@ long as `devvm.dockerShims` is off for the host.
   `devvm-registry-OWNER`, installs its hash in the guest, and says how to
   read it; run again, it puts the same key back. The journal has a line per
   write, with its user: `journalctl -t registry_writes`. A build's RUN steps run on
-  a network of their own, `10.89.0.0/24`: the internet and lima's DNS, but
-  not the node, the pods, the services or the Mac. Caps: 10 GB of build
+  a network of their own, `10.89.0.0/24`: the internet and their own
+  resolver on `10.89.0.1` (`agent-builds-dns`, lima's DNS with AAAA
+  answered empty), but not the node, the pods, the services or the Mac. Caps: 10 GB of build
   cache, the `agents` namespace's images pruned daily, and the registry's
   tags dropped after a week unpushed, sooner while it is over 15 GiB, except
   a tag a workload names (`agent-builds-prune`, daily). The Mac's own builds keep the other daemon,
@@ -532,8 +533,8 @@ set `devvm.stateDiskSize` to match, so the next machine is created that way.
   a new state disk, or a guest from before D45. `devvm-registry-key OWNER`
   installs it again from the keychain, the same key. A push to any other
   repository needs none.
-- **A build's RUN step cannot reach a host.** Only the internet and lima's
-  DNS are open to it (D45): the node, the pods, the services, the Mac and
+- **A build's RUN step cannot reach a host.** Only the internet and its
+  resolver on `10.89.0.1` are open to it (D45): the node, the pods, the services, the Mac and
   private ranges are closed by `agent-builds-network`
   (`iptables -t raw -S AGENT-BUILDS`). A build that needs one of those is a
   change to D45, not a rule added by hand.
